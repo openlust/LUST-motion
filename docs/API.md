@@ -72,13 +72,18 @@ This API can be used to restrict the mechanical reach of the machine and limit t
 | depth_limit    | number | 0.0 - `travel`    | maximum depth of the motion                                                         | truncated into range |
 | stroke_limit   | number | 0.0 - `travel`    | length of the stroke                                                                | truncated into range |
 | speed_limit    | number | 0.0 - `max_speed` | affects the feeling of a pattern                                                    | truncated into range |
-| heartbeat_mode | number | 0 - 2             | selects the heartbeat mode and how to enter safestate if a client looses connection | ignored              |
+| heartbeat_mode | number | 0 - 2             | selects the heartbeat mode and how to enter safestate if a client looses connection | 1                    |
+| ease_in_speed  | number | 0.0 - 30.0        | speed in mm/s it takes to ease in changes in stroke or depth                        | truncated into range |
+
+#### Heart Beat Mode
 
 | Heartbeat Mode | Description                                |
 | :------------: | ------------------------------------------ |
 |       0        | Heartbeat disabled                         |
 |       1        | Enter safestate if one connections drops   |
 |       2        | Enter safestate when last connection drops |
+
+A client can safely disconnect if the machine is in standstill and any motion input disabled.
 
 #### JSON
 
@@ -87,7 +92,8 @@ This API can be used to restrict the mechanical reach of the machine and limit t
     "depth_limit": 120.0,
     "stroke_limit": 80.5,
     "speed_limit": 30.0,
-    "heartbeat_mode": 0
+    "heartbeat_mode": 0,
+    "ease_in_speed": 5.0
 }
 ```
 
@@ -119,7 +125,7 @@ This API will provide the information about the environment like maximum travel 
 
 ### StrokeEngine Streaming _write-only_
 
-Instead of pattern the motion commands can be provided via this streaming interface, too. Messages are queued up with a queue length of 5. Writing to a full queue will result in the message being discarded. An empty queue will stop the motion. Changing `go` or `pattern` will erase the queue. That way streaming always starts with a fresh queue. This service is write only. Changes won't propagate to other clients and a GET request will return an empty JSON.
+Instead of pattern the motion commands can be provided via this streaming interface, too. Messages are queued up with a queue length of 5. Writing to a full queue will result in the message being discarded. An empty queue will stop the motion. Changing `go` or `pattern` in the [Control API](#strokeengine-control) will erase the queue. That way streaming always starts with a fresh queue. This service is write only. Changes won't propagate to other clients and a GET request will return an empty JSON.
 
 > Defined in `StrokeEngineStreamingService.h`
 
