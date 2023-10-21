@@ -68,14 +68,6 @@ public:
 
   /**************************************************************************/
   /*!
-    @brief  Initiates the homing procedure of the motor. Once completed the
-    homed flag must be set.
-  */
-  /**************************************************************************/
-  // virtual void home() = 0;
-
-  /**************************************************************************/
-  /*!
     @brief  Returns the homed state of the motor.
     @return homed state
   */

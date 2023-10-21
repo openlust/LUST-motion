@@ -67,21 +67,21 @@ This API can be used to restrict the mechanical reach of the machine and limit t
 | GET    | /rest/safety | `NONE_REQUIRED` |
 | POST   | /rest/safety | `NONE_REQUIRED` |
 
-| Parameter      | Type   | Range             | Info                                                                                | Failure Mode         |
-| -------------- | ------ | ----------------- | ----------------------------------------------------------------------------------- | -------------------- |
-| depth_limit    | number | 0.0 - `travel`    | maximum depth of the motion                                                         | truncated into range |
-| stroke_limit   | number | 0.0 - `travel`    | length of the stroke                                                                | truncated into range |
-| speed_limit    | number | 0.0 - `max_speed` | affects the feeling of a pattern                                                    | truncated into range |
-| heartbeat_mode | number | 0 - 2             | selects the heartbeat mode and how to enter safestate if a client looses connection | 1                    |
-| ease_in_speed  | number | 0.0 - 30.0        | speed in mm/s it takes to ease in changes in stroke or depth                        | truncated into range |
+| Parameter      | Type   | Range                     | Info                                                                                | Failure Mode         |
+| -------------- | ------ | ------------------------- | ----------------------------------------------------------------------------------- | -------------------- |
+| depth_limit    | number | 0.0 - `travel`            | maximum depth of the motion                                                         | truncated into range |
+| stroke_limit   | number | 0.0 - `travel`            | length of the stroke                                                                | truncated into range |
+| speed_limit    | number | 0.0 - `max_speed`         | affects the feeling of a pattern                                                    | truncated into range |
+| heartbeat_mode | string | "disabled", "last", "any" | selects the heartbeat mode and how to enter safestate if a client looses connection | "any"                |
+| ease_in_speed  | number | 0.0 - 30.0                | speed in mm/s it takes to ease in changes in stroke or depth                        | truncated into range |
 
 #### Heart Beat Mode
 
 | Heartbeat Mode | Description                                |
 | :------------: | ------------------------------------------ |
-|       0        | Heartbeat disabled                         |
-|       1        | Enter safestate if one connections drops   |
-|       2        | Enter safestate when last connection drops |
+|   "disabled"   | Heartbeat disabled                         |
+|     "any"      | Enter safestate if one connections drops   |
+|     "last"     | Enter safestate when last connection drops |
 
 A client can safely disconnect if the machine is in standstill and any motion input disabled.
 
@@ -154,3 +154,5 @@ Instead of pattern the motion commands can be provided via this streaming interf
     "vibration_speed": 25.0
 }
 ```
+
+## Server Sent Events

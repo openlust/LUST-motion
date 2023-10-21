@@ -14,10 +14,12 @@
 #define VIRTUAL
 
 #include <ESP32SvelteKit.h>
-#include <ESPmNDS.h>
+#include <ESPmDNS.h>
 #include <LightMqttSettingsService.h>
 #include <LightStateService.h>
 #include <StrokeEngine.h>
+#include <SettingValue.h>
+#include <WebSocketRawDataStreaming.h>
 #ifdef VIRTUAL
 #include <motor/virtualMotor.h>
 #else
@@ -69,6 +71,8 @@ LightStateService lightStateService = LightStateService(&server,
                                                         esp32sveltekit.getMqttClient(),
                                                         &lightMqttSettingsService);
 
+WebSocketRawDataStreamer PositionStream(&server);
+
 /*#################################################################################################
 ##
 ##    C A L L B A C K S
@@ -77,13 +81,7 @@ LightStateService lightStateService = LightStateService(&server,
 
 void printSpeedPositionOnSerial(unsigned int time, float position, float speed)
 {
-    String json = "{\"time\": ";
-    json += String(time);
-    json += ", \"position\": ";
-    json += String(position, 2);
-    json += ", \"speed\": ";
-    json += String(speed, 2);
-    json += "}";
+    PositionStream.streamRawData(time, position, speed);
 }
 
 /*#################################################################################################
@@ -121,12 +119,12 @@ void setup()
     // start serial and filesystem
     Serial.begin(SERIAL_BAUD_RATE);
 
-    // start the framework and demo project
+    // start the framework and LUST-motion
     esp32sveltekit.setMDNSAppName("LUST-motion");
+    esp32sveltekit.begin();
     MDNS.addService("stroking", "tcp", 80);
     MDNS.addServiceTxt("stroking", "tcp", "FirmwareVersion", FIRMWARE_VERSION);
-    MDNS.addServiceTxt("stroking", "tcp", "DeviceID", "test");
-    esp32sveltekit.begin();
+    MDNS.addServiceTxt("stroking", "tcp", "DeviceID", SettingValue::format("LUST-motion-#{unique_id}"));
 
     // load the initial light settings
     lightStateService.begin();
@@ -138,10 +136,10 @@ void setup()
     server.begin();
 
 #ifdef VIRTUAL
-    motor.begin(printSpeedPositionOnSerial, 50);
+    motor.begin(printSpeedPositionOnSerial, 20);
 #else
     motor.begin(&servoMotor);
-    // motor.attachPositionFeedback(printSpeedPositionOnSerial, 50);
+    motor.attachPositionFeedback(printSpeedPositionOnSerial, 20);
     motor.setSensoredHoming(OSSM[0].pin.lmt1, INPUT_PULLUP, true);
 #endif
     motor.setMaxSpeed(MAX_SPEED);     // 2 m/s

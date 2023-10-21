@@ -20,8 +20,8 @@
 	Chart.register(LuxonAdapter);
 	Chart.register(ChartStreaming);
 
-	let pressureChartElement: HTMLCanvasElement;
-	let pressureChart: Chart;
+	let positionChartElement: HTMLCanvasElement;
+	let positionChart: Chart;
 
 	let dataSocket: WebSocket;
 	let unresponsiveTimeoutData: number;
@@ -30,7 +30,7 @@
 	let lastdpdt: number = 0;
 
 	function openDataSocket() {
-		dataSocket = new WebSocket('ws://' + $page.url.host + '/ws/rawData');
+		dataSocket = new WebSocket('ws://' + $page.url.host + '/ws/rawPosition');
 		dataSocket.binaryType = 'arraybuffer';
 		console.log(`trying to connect to: ${dataSocket.url}`);
 
@@ -57,26 +57,14 @@
 			}
 
 			for (let i = 0; i < data.length; i++) {
-				let dpdt = (data[i][2] * 0.01 - lastPressure) * 40;
-				let d2pdt2 = lastdpdt - dpdt;
-				pressureChart.data.datasets[0].data.push({
+				positionChart.data.datasets[0].data.push({
 					x: timeSync + data[i][0],
-					y: data[i][1] * 0.01
+					y: data[i][1]
 				});
-				pressureChart.data.datasets[1].data.push({
+				positionChart.data.datasets[1].data.push({
 					x: timeSync + data[i][0],
-					y: data[i][2] * 0.01
+					y: data[i][2]
 				});
-				pressureChart.data.datasets[2].data.push({
-					x: timeSync + data[i][0],
-					y: dpdt
-				});
-				pressureChart.data.datasets[3].data.push({
-					x: timeSync + data[i][0],
-					y: d2pdt2
-				});
-				lastPressure = data[i][2] * 0.01;
-				lastdpdt = dpdt;
 			}
 		};
 
@@ -91,7 +79,7 @@
 
 	onMount(() => {
 		openDataSocket();
-		pressureChart = new Chart(pressureChartElement, {
+		positionChart = new Chart(positionChartElement, {
 			type: 'line',
 			data: {
 				datasets: [
@@ -125,7 +113,7 @@
 				plugins: {
 					// Change options for ALL axes of THIS CHART
 					streaming: {
-						duration: 20000,
+						duration: 10000,
 						refresh: 25,
 						delay: 100
 					},
@@ -196,7 +184,7 @@
 
 <div class="card bg-base-200 shadow-md shadow-primary/50 mt-3 mb-1.5 mx-auto w-11/12">
 	<div class="relative h-72 md:h-96 w-full p-2">
-		<canvas bind:this={pressureChartElement} />
+		<canvas bind:this={positionChartElement} />
 	</div>
 </div>
 <div class="card bg-base-200 shadow-md shadow-primary/50 my-1.5 mx-auto w-11/12">
