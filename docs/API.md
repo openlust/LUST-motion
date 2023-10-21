@@ -2,7 +2,7 @@
 
 ## MDNS
 
-LUST-motion is discoverable by MDNS services und advertises a `stroking` service. This can be used to identify the device on the local network and establish connections with it. The following service texts provide further information
+LUST-motion is discoverable by MDNS services und advertises a `stroking` service. This can be used to identify the device on the local network and establish connections with it. The following service texts provide further information:
 
 | Text            | Information                                                                 |
 | --------------- | --------------------------------------------------------------------------- |
@@ -11,9 +11,13 @@ LUST-motion is discoverable by MDNS services und advertises a `stroking` service
 
 ## Stateful Services
 
+Stateful services offer direct control over the machine and can be reached via a RESTful API. Some stateful services are also offered through a websocket server or MQTT. All changes are internally synchronized and propagated back to all clients. Redundant messages which do not change any internal state are filtered out and not propagated.
+
+> **_⚠️ IMPORTANT:_** There is a rate limit to these updates. You should avoid more then 10 Hz, otherwise the API might become unstable and could cause a fatal crash.
+
 ### StrokeEngine Control
 
-The main control API to control LUST-motion. Starts and stops the motion, changes the main parameters depth, stroke, speed and sensation. Also allows the selection of a pattern, or if the streaming interfaces should be used as input source for the motion generation.
+The main control API to control LUST-motion. Starts and stops the motion, changes the main parameters depth, stroke, speed and sensation. Also allows the selection of a pattern, or if the streaming interfaces should be used as input source for the motion generation. In addition it provides the possibility to override the vibration overlay with fixed costume values. If enabled, vibration commands from pattern or streaming are ignored.
 
 > Defined in `StrokeEngineControlService.h`
 
@@ -22,19 +26,21 @@ The main control API to control LUST-motion. Starts and stops the motion, change
 | GET    | /rest/control | `NONE_REQUIRED` |
 | POST   | /rest/control | `NONE_REQUIRED` |
 | WS     | /ws/control   | `NONE_REQUIRED` |
+| MQTT   | -             | `NONE_REQUIRED` |
 
-### Parameters
+| Parameter           | Type    | Range             | Info                                                                                                                | Failure Mode         |
+| ------------------- | ------- | ----------------- | ------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| go                  | boolean | true / false      | Starts & stops the motion                                                                                           | false                |
+| depth               | number  | 0.0 - `travel`    | maximum depth of the motion                                                                                         | truncated into range |
+| stroke              | number  | 0.0 - `travel`    | length of the stroke                                                                                                | truncated into range |
+| speed               | number  | 0.0 - `max_speed` | speed in strokes per minute                                                                                         | truncated into range |
+| sensation           | number  | -100.0 - +100.0   | affects the feeling of a pattern                                                                                    | truncated into range |
+| pattern             | string  | -                 | pattern that should be used to create interesting motion                                                            | ignored              |
+| vibration_override  | boolean | true / false      | overrides the vibration overlay with these parameters. Vibration commands from pattern or streaming will be ignored | false                |
+| vibration_amplitude | number  | 0.0 - 5.0         | amplitude of a vibration overlay, 0.0 == off                                                                        | truncated into range |
+| vibration_speed     | string  | 10.0 - 50.0       | frequency in HZ of the vibration overlay                                                                            | truncated into range |
 
-| Parameter | Type    | Range           | Info                             | Failure Mode         |
-| --------- | ------- | --------------- | -------------------------------- | -------------------- |
-| go        | boolean | true / false    | Starts & stops the motion        | ignored              |
-| depth     | float   | 0.0 - `travel`  | maximum depth of the motion      | truncated into range |
-| stroke    | float   | 0.0 - `travel`  | length of the stroke             | truncated into range |
-| speed     | float   | 0.0 - `speed`   | speed in strokes per minute      | truncated into range |
-| sensation | float   | -100.0 - +100.0 | affects the feeling of a pattern | truncated into range |
-| pattern   | string  | -               | maximum depth of the motion      | ignored              |
-
-### JSON
+#### JSON
 
 ```JSON
 {
@@ -43,7 +49,10 @@ The main control API to control LUST-motion. Starts and stops the motion, change
     "stroke": 80.5,
     "speed": 30.0,
     "sensation": 0.0,
-    "pattern": "Deeper"
+    "pattern": "Deeper",
+    "vibration_override": false,
+    "vibration_amplitude": 0.0,
+    "vibration_speed": 25.0
 }
 ```
 
@@ -58,25 +67,31 @@ This API can be used to restrict the mechanical reach of the machine and limit t
 | GET    | /rest/safety | `NONE_REQUIRED` |
 | POST   | /rest/safety | `NONE_REQUIRED` |
 
-### Parameters
+| Parameter      | Type   | Range             | Info                                                                                | Failure Mode         |
+| -------------- | ------ | ----------------- | ----------------------------------------------------------------------------------- | -------------------- |
+| depth_limit    | number | 0.0 - `travel`    | maximum depth of the motion                                                         | truncated into range |
+| stroke_limit   | number | 0.0 - `travel`    | length of the stroke                                                                | truncated into range |
+| speed_limit    | number | 0.0 - `max_speed` | affects the feeling of a pattern                                                    | truncated into range |
+| heartbeat_mode | number | 0 - 2             | selects the heartbeat mode and how to enter safestate if a client looses connection | ignored              |
 
-| Parameter    | Type  | Range          | Info                             | Failure Mode         |
-| ------------ | ----- | -------------- | -------------------------------- | -------------------- |
-| depth_limit  | float | 0.0 - `travel` | maximum depth of the motion      | truncated into range |
-| stroke_limit | float | 0.0 - `travel` | length of the stroke             | truncated into range |
-| speed_limit  | float | 0.0 - `speed`  | affects the feeling of a pattern | truncated into range |
+| Heartbeat Mode | Description                                |
+| :------------: | ------------------------------------------ |
+|       0        | Heartbeat disabled                         |
+|       1        | Enter safestate if one connections drops   |
+|       2        | Enter safestate when last connection drops |
 
-### JSON
+#### JSON
 
 ```JSON
 {
     "depth_limit": 120.0,
     "stroke_limit": 80.5,
-    "speed_limit": 30.0
+    "speed_limit": 30.0,
+    "heartbeat_mode": 0
 }
 ```
 
-### StrokeEngine Environment _readonly_
+### StrokeEngine Environment _read-only_
 
 This API will provide the information about the environment like maximum travel or maximum speed. This can be used by the UI to scale UI elements according to the machines real physical properties.
 
@@ -86,18 +101,48 @@ This API will provide the information about the environment like maximum travel 
 | ------ | ----------------- | --------------- |
 | GET    | /rest/environment | `NONE_REQUIRED` |
 
-### Parameters
+| Parameter   | Type    | Info                                                                                                 |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| travel      | number  | maximum travel of the machine. Used for depth and stroke                                             |
+| speed_limit | number  | maximum speed in FPM that the machine is capable                                                     |
+| heartbeat   | boolean | if heartbeat is true the control message must be sent every second, regardless wether it has changed |
 
-| Parameter   | Type  | Info                                                     |
-| ----------- | ----- | -------------------------------------------------------- |
-| travel      | float | maximum travel of the machine. Used for depth and stroke |
-| speed_limit | float | maximum speed in FPM that the machine is capable         |
-
-### JSON
+#### JSON
 
 ```JSON
 {
     "travel": 150.0,
-    "max_speed": 30.0
+    "max_speed": 30.0,
+    "heartbeat": true
+}
+```
+
+### StrokeEngine Streaming _write-only_
+
+Instead of pattern the motion commands can be provided via this streaming interface, too. Messages are queued up with a queue length of 5. Writing to a full queue will result in the message being discarded. An empty queue will stop the motion. Changing `go` or `pattern` will erase the queue. That way streaming always starts with a fresh queue. This service is write only. Changes won't propagate to other clients and a GET request will return an empty JSON.
+
+> Defined in `StrokeEngineStreamingService.h`
+
+| Method | URL             | Authentication  |
+| ------ | --------------- | --------------- |
+| POST   | /rest/streaming | `NONE_REQUIRED` |
+| WS     | /ws/streaming   | `NONE_REQUIRED` |
+| MQTT   | -               | `NONE_REQUIRED` |
+
+| Parameter           | Type   | Range       | Info                                                                                       | Failure Mode                |
+| ------------------- | ------ | ----------- | ------------------------------------------------------------------------------------------ | --------------------------- |
+| stroke              | number | 0.0 - 1.0   | relative length of the stroke, mapped to the true stroke length set by the control message | truncated into range        |
+| duration            | number | 0.0 - 60.0  | duration of the stroke in seconds                                                          | truncated into range        |
+| vibration_amplitude | number | 0.0 - 5.0   | amplitude of a vibration overlay, 0.0 == off                                               | truncated into range or 0.0 |
+| vibration_speed     | string | 10.0 - 50.0 | frequency in HZ of the vibration overlay                                                   | truncated into range        |
+
+#### JSON
+
+```JSON
+{
+    "stroke": 0.85,
+    "duration": 2.21,
+    "vibration_amplitude": 0.0,
+    "vibration_speed": 25.0
 }
 ```
