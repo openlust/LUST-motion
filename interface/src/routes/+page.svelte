@@ -20,14 +20,37 @@
 	Chart.register(LuxonAdapter);
 	Chart.register(ChartStreaming);
 
+	type ControlState = {
+		go: boolean;
+		depth: number;
+		stroke: number;
+		rate: number;
+		sensation: number;
+		pattern: string;
+		vibration_override: boolean;
+		vibration_amplitude: number;
+		vibration_frequency: number;
+	};
+
+	let controlState: ControlState = {
+		go: false,
+		depth: 0.0,
+		stroke: 0.0,
+		rate: 0.0,
+		sensation: 0.0,
+		pattern: '',
+		vibration_override: false,
+		vibration_amplitude: 0.0,
+		vibration_frequency: 0.0
+	};
+
 	let positionChartElement: HTMLCanvasElement;
 	let positionChart: Chart;
 
 	let dataSocket: WebSocket;
+	let controlSocket: WebSocket;
 	let unresponsiveTimeoutData: number;
 	let timeSync: number = 0;
-	let lastPressure: number = 1024;
-	let lastdpdt: number = 0;
 
 	function openDataSocket() {
 		dataSocket = new WebSocket('ws://' + $page.url.host + '/ws/rawPosition');
@@ -73,12 +96,48 @@
 		};
 	}
 
+	function openControlSocket() {
+		controlSocket = new WebSocket('ws://' + $page.url.host + '/ws/control');
+		console.log(`trying to connect to: ${controlSocket.url}`);
+
+		controlSocket.onopen = () => {
+			console.log(`connection open to: ${controlSocket.url}`);
+		};
+
+		controlSocket.onclose = () => {
+			console.log(`connection closed to: ${controlSocket.url}`);
+		};
+
+		controlSocket.onmessage = (event) => {
+			controlState = JSON.parse(event.data);
+		};
+
+		controlSocket.onerror = () => {
+			console.log(`connection error with: ${controlSocket.url}`);
+		};
+	}
+
+	function sendControl() {
+		controlSocket.send(JSON.stringify(controlState));
+	}
+
+	function controlSession() {
+		if (controlState.go === true) {
+			controlState.go = false;
+		} else {
+			controlState.go = true;
+		}
+		sendControl();
+	}
+
 	onDestroy(() => {
 		dataSocket.close();
+		controlSocket.close();
 	});
 
 	onMount(() => {
 		openDataSocket();
+		openControlSocket();
 		positionChart = new Chart(positionChartElement, {
 			type: 'line',
 			data: {
@@ -193,15 +252,15 @@
 			type="range"
 			min="0"
 			max="150"
-			value="120"
+			bind:value={controlState.depth}
 			on:change={() => {
-				// nothing
+				sendControl();
 			}}
 			class="range range-primary range-xs"
 		/>
 		<label class="label mt-0 pt-0">
 			<span class="label-text">Depth</span>
-			<span class="label-text-alt">120 mm</span>
+			<span class="label-text-alt">{controlState.depth} mm</span>
 		</label>
 	</div>
 	<div class="mt-4 mx-4">
@@ -209,15 +268,15 @@
 			type="range"
 			min="0"
 			max="150"
-			value="60"
+			bind:value={controlState.stroke}
 			on:change={() => {
-				// nothing
+				sendControl();
 			}}
 			class="range range-primary range-xs"
 		/>
 		<label class="label mt-0 pt-0">
 			<span class="label-text">Stroke</span>
-			<span class="label-text-alt">60 mm</span>
+			<span class="label-text-alt">{controlState.stroke} mm</span>
 		</label>
 	</div>
 	<div class="mt-4 mx-4">
@@ -225,15 +284,15 @@
 			type="range"
 			min="0"
 			max="100"
-			value="20"
+			bind:value={controlState.rate}
 			on:change={() => {
-				// nothing
+				sendControl();
 			}}
 			class="range range-primary range-xs"
 		/>
 		<label class="label mt-0 pt-0">
 			<span class="label-text">Speed</span>
-			<span class="label-text-alt">20 FPM</span>
+			<span class="label-text-alt">{controlState.rate} FPM</span>
 		</label>
 	</div>
 	<div class="mt-4 mx-4">
@@ -241,22 +300,26 @@
 			type="range"
 			min="-100"
 			max="100"
-			value="0"
+			bind:value={controlState.sensation}
 			on:change={() => {
-				// nothing
+				sendControl();
 			}}
 			class="range range-primary range-xs"
 		/>
 		<label class="label mt-0 pt-0">
 			<span class="label-text">Sensation</span>
-			<span class="label-text-alt">0</span>
+			<span class="label-text-alt">{controlState.sensation}</span>
 		</label>
 	</div>
 
 	<div class="m-4 flex flex-wrap gap-6 justify-between">
 		<div class="flex flex-nowrap justify-start gap-6">
-			<button class="btn btn-primary inline-flex items-center w-32">
-				<Start class="mr-2 h-5 w-5" /><span>Start</span>
+			<button class="btn btn-primary inline-flex items-center w-32" on:click={controlSession}>
+				{#if controlState.go === false}
+					<Start class="mr-2 h-5 w-5" /><span>Start</span>
+				{:else}
+					<Stop class="mr-2 h-5 w-5" /><span>Stop</span>
+				{/if}
 			</button>
 			<select class="select select-primary w-52">
 				<option>Depth Adjustment</option>

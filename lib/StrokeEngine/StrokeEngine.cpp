@@ -101,6 +101,22 @@ bool StrokeEngine::setPattern(int patternIndex, bool applyNow)
   return false;
 }
 
+bool StrokeEngine::setPattern(String patternName, bool applyNow)
+{
+  for (size_t i = 0; i < patternTableSize; i++)
+  {
+    if (patternTable[i]->getName() == patternName.c_str())
+    {
+      setPattern(i, applyNow);
+      return true;
+    }
+  }
+
+  // Return false on no match
+  ESP_LOGE("StrokeEngine", "Failed to set pattern!");
+  return false;
+}
+
 float StrokeEngine::getParameter(StrokeParameter parameter)
 {
   switch (parameter)

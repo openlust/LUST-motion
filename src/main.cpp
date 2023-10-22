@@ -19,6 +19,7 @@
 #include <LightStateService.h>
 #include <StrokeEngine.h>
 #include <SettingValue.h>
+#include <StrokeEngineControlService.h>
 #include <WebSocketRawDataStreaming.h>
 #ifdef VIRTUAL
 #include <motor/virtualMotor.h>
@@ -70,6 +71,12 @@ LightStateService lightStateService = LightStateService(&server,
                                                         esp32sveltekit.getSecurityManager(),
                                                         esp32sveltekit.getMqttClient(),
                                                         &lightMqttSettingsService);
+
+StrokeEngineControlService strokeEngineControlService = StrokeEngineControlService(&Stroker,
+                                                                                   &server,
+                                                                                   esp32sveltekit.getSecurityManager(),
+                                                                                   esp32sveltekit.getMqttClient(),
+                                                                                   &lightMqttSettingsService);
 
 WebSocketRawDataStreamer PositionStream(&server);
 
@@ -132,13 +139,15 @@ void setup()
     // start the light service
     lightMqttSettingsService.begin();
 
+    strokeEngineControlService.begin();
+
     // start the server
     server.begin();
 
 #ifdef VIRTUAL
     motor.begin(printSpeedPositionOnSerial, 20);
 #else
-    motor.begin(&servoMotor);
+    motor.begin();
     motor.attachPositionFeedback(printSpeedPositionOnSerial, 20);
     motor.setSensoredHoming(OSSM[0].pin.lmt1, INPUT_PULLUP, true);
 #endif
@@ -155,10 +164,10 @@ void setup()
     // mqttPublish("/config", getPatternJSON());
 
     // Wait a little bit
-    delay(1000);
+    // delay(1000);
 
-    Stroker.setParameter(StrokeParameter::SENSATION, 30.0, true);
-    Stroker.startPattern();
+    // Stroker.setParameter(StrokeParameter::SENSATION, 30.0, true);
+    // Stroker.startPattern();
 }
 
 void loop()

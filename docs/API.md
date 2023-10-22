@@ -28,17 +28,17 @@ The main control API to control LUST-motion. Starts and stops the motion, change
 | WS     | /ws/control   | `NONE_REQUIRED` |
 | MQTT   | -             | `NONE_REQUIRED` |
 
-| Parameter           | Type    | Range             | Info                                                                                                                    | Failure Mode         |
-| ------------------- | ------- | ----------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------- |
-| go                  | boolean | true / false      | Starts & stops the motion                                                                                               | false                |
-| depth               | number  | 0.0 - `travel`    | maximum depth of the motion                                                                                             | truncated into range |
-| stroke              | number  | 0.0 - `travel`    | length of the stroke                                                                                                    | truncated into range |
-| speed               | number  | 0.0 - `max_speed` | speed in strokes per minute                                                                                             | truncated into range |
-| sensation           | number  | -100.0 - +100.0   | affects the feeling of a pattern                                                                                        | truncated into range |
-| pattern             | number  | 0 - ...           | index of a pattern in the pattern array returned by [StrokeEngine Environment API](#strokeengine-environment-read-only) | ignored              |
-| vibration_override  | boolean | true / false      | overrides the vibration overlay with these parameters. Vibration commands from pattern or streaming will be ignored     | false                |
-| vibration_amplitude | number  | 0.0 - 5.0         | amplitude of a vibration overlay, 0.0 == off                                                                            | truncated into range |
-| vibration_speed     | string  | 10.0 - 50.0       | frequency in HZ of the vibration overlay                                                                                | truncated into range |
+| Parameter           | Type    | Range            | Info                                                                                                                   | Failure Mode         |
+| ------------------- | ------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| go                  | boolean | true / false     | Starts & stops the motion                                                                                              | false                |
+| depth               | number  | 0.0 - `travel`   | maximum depth of the motion                                                                                            | truncated into range |
+| stroke              | number  | 0.0 - `travel`   | length of the stroke                                                                                                   | truncated into range |
+| rate                | number  | 0.0 - `max_rate` | rate in strokes per minute                                                                                             | truncated into range |
+| sensation           | number  | -100.0 - +100.0  | affects the feeling of a pattern                                                                                       | truncated into range |
+| pattern             | string  | -                | name of a pattern in the pattern array returned by [StrokeEngine Environment API](#strokeengine-environment-read-only) | ignored              |
+| vibration_override  | boolean | true / false     | overrides the vibration overlay with these parameters. Vibration commands from pattern or streaming will be ignored    | false                |
+| vibration_amplitude | number  | 0.0 - 5.0        | amplitude of a vibration overlay, 0.0 == off                                                                           | truncated into range |
+| vibration_frequency | number  | 10.0 - 50.0      | frequency in HZ of the vibration overlay                                                                               | truncated into range |
 
 #### JSON
 
@@ -47,12 +47,12 @@ The main control API to control LUST-motion. Starts and stops the motion, change
     "go": true,
     "depth": 120.0,
     "stroke": 80.5,
-    "speed": 30.0,
+    "rate": 30.0,
     "sensation": 0.0,
-    "pattern": 3,
+    "pattern": "Deeper",
     "vibration_override": false,
     "vibration_amplitude": 0.0,
-    "vibration_speed": 25.0
+    "vibration_frequency": 25.0
 }
 ```
 
@@ -71,7 +71,7 @@ This API can be used to restrict the mechanical reach of the machine and limit t
 | -------------- | ------ | ------------------------- | ----------------------------------------------------------------------------------- | -------------------- |
 | depth_limit    | number | 0.0 - `travel`            | maximum depth of the motion                                                         | truncated into range |
 | stroke_limit   | number | 0.0 - `travel`            | length of the stroke                                                                | truncated into range |
-| speed_limit    | number | 0.0 - `max_speed`         | affects the feeling of a pattern                                                    | truncated into range |
+| rate_limit     | number | 0.0 - `max_rate`          | affects the feeling of a pattern                                                    | truncated into range |
 | heartbeat_mode | string | "disabled", "last", "any" | selects the heartbeat mode and how to enter safestate if a client looses connection | "any"                |
 | ease_in_speed  | number | 0.0 - 30.0                | speed in mm/s it takes to ease in changes in stroke or depth                        | truncated into range |
 
@@ -91,7 +91,7 @@ A client can safely disconnect if the machine is in standstill and any motion in
 {
     "depth_limit": 120.0,
     "stroke_limit": 80.5,
-    "speed_limit": 30.0,
+    "rate_limit": 30.0,
     "heartbeat_mode": 0,
     "ease_in_speed": 5.0
 }
@@ -107,19 +107,19 @@ This API will provide the information about the environment like maximum travel 
 | ------ | ----------------- | --------------- |
 | GET    | /rest/environment | `NONE_REQUIRED` |
 
-| Parameter   | Type             | Info                                                                                                 |
-| ----------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
-| travel      | number           | maximum travel of the machine. Used for depth and stroke                                             |
-| speed_limit | number           | maximum speed in FPM that the machine is capable                                                     |
-| heartbeat   | boolean          | if heartbeat is true the control message must be sent every second, regardless wether it has changed |
-| pattern     | array of strings | array of all available pattern names                                                                 |
+| Parameter  | Type             | Info                                                                                                 |
+| ---------- | ---------------- | ---------------------------------------------------------------------------------------------------- |
+| travel     | number           | maximum travel of the machine. Used for depth and stroke                                             |
+| rate_limit | number           | maximum rate in FPM that the machine is capable                                                      |
+| heartbeat  | boolean          | if heartbeat is true the control message must be sent every second, regardless wether it has changed |
+| pattern    | array of strings | array of all available pattern names                                                                 |
 
 #### JSON
 
 ```JSON
 {
     "travel": 150.0,
-    "max_speed": 30.0,
+    "max_rate": 30.0,
     "heartbeat": true,
     "pattern": ["Depth Adjustment", "Streaming", "Pounding or Teasing", "Robo Stroke"]
 }
@@ -142,7 +142,7 @@ Instead of pattern the motion commands can be provided via this streaming interf
 | stroke              | number | 0.0 - 1.0   | relative length of the stroke, mapped to the true stroke length set by the control message | truncated into range        |
 | duration            | number | 0.0 - 60.0  | duration of the stroke in seconds                                                          | truncated into range        |
 | vibration_amplitude | number | 0.0 - 5.0   | amplitude of a vibration overlay, 0.0 == off                                               | truncated into range or 0.0 |
-| vibration_speed     | string | 10.0 - 50.0 | frequency in HZ of the vibration overlay                                                   | truncated into range        |
+| vibration_frequency | number | 10.0 - 50.0 | frequency in HZ of the vibration overlay                                                   | truncated into range        |
 
 #### JSON
 
@@ -151,7 +151,7 @@ Instead of pattern the motion commands can be provided via this streaming interf
     "stroke": 0.85,
     "duration": 2.21,
     "vibration_amplitude": 0.0,
-    "vibration_speed": 25.0
+    "vibration_frequency": 25.0
 }
 ```
 

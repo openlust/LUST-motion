@@ -701,9 +701,9 @@ protected:
 */
 /**************************************************************************/
 static Pattern *patternTable[] = {
-    //  new DepthAdjustment("Depth Adjustment"),
-    new TeasingPounding("Pounding or Teasing"),
-    new RoboStroke("Robo Stroke"),
+    //  new DepthAdjustment("DepthAdjustment"),
+    new TeasingPounding("PoundingTeasing"),
+    new RoboStroke("RoboStroke"),
     new HalfnHalf("Half'n'Half"),
     new Deeper("Deeper"),
     new StopNGo("Stop'n'Go"),

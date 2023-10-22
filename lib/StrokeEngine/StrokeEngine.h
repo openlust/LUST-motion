@@ -45,6 +45,7 @@ class StrokeEngine
 {
 public:
   void attachMotor(MotorInterface *motor);
+  MotorInterface *getMotor() { return _motor; }
 
   /*!
     @brief Sets an internal Pattern Parameter. Takes effect on next stroke unless applyNow issued
@@ -74,6 +75,17 @@ public:
   */
   /**************************************************************************/
   bool setPattern(int patternIndex, bool applyNow = true);
+  /**************************************************************************/
+  /*!
+    @brief  Choose a pattern for the StrokeEngine. Settings take effect with
+    next stroke, or after calling applyNewSettingsNow().
+    @param patternName  Name of a pattern
+    @param applyNow Set to true if changes should take effect immediately
+    @return TRUE on success, FALSE, if patternIndex is invalid. Previous
+                  pattern will be retained.
+  */
+  /**************************************************************************/
+  bool setPattern(String patternName, bool applyNow = true);
 
   /**************************************************************************/
   /*!
