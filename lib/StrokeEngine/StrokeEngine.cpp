@@ -21,7 +21,7 @@ void StrokeEngine::attachMotor(MotorInterface *motor)
   ESP_LOGI("StrokeEngine", "Attached Motor successfully to Stroke Engine!");
 }
 
-void StrokeEngine::setParameter(StrokeParameter parameter, float value, bool applyNow)
+float StrokeEngine::setParameter(StrokeParameter parameter, float value, bool applyNow)
 {
   String name;
   float debugValue;
@@ -33,7 +33,8 @@ void StrokeEngine::setParameter(StrokeParameter parameter, float value, bool app
       name = "Stroke Time";
       // Convert FPM into seconds to complete a full stroke
       // Constrain stroke time between 100ms and 120 seconds
-      debugValue = _timeOfStroke = constrain(60.0 / value, 0.1, 120.0);
+      _timeOfStroke = constrain(60.0 / value, 0.1, 120.0);
+      debugValue = 60.0 / _timeOfStroke;
       break;
 
     case StrokeParameter::DEPTH:
@@ -65,6 +66,9 @@ void StrokeEngine::setParameter(StrokeParameter parameter, float value, bool app
     }
 
     xSemaphoreGive(_parameterMutex);
+
+    // return the actually used value after input sanitizing
+    return debugValue;
   }
 }
 
@@ -103,9 +107,10 @@ bool StrokeEngine::setPattern(int patternIndex, bool applyNow)
 
 bool StrokeEngine::setPattern(String patternName, bool applyNow)
 {
+  ESP_LOGD("StrokeEngine", "Select pattern by string: %s", patternName);
   for (size_t i = 0; i < patternTableSize; i++)
   {
-    if (patternTable[i]->getName() == patternName.c_str())
+    if (strcmp(patternTable[i]->getName(), patternName.c_str()) == 0)
     {
       setPattern(i, applyNow);
       return true;
@@ -134,7 +139,7 @@ float StrokeEngine::getParameter(StrokeParameter parameter)
   }
 }
 
-int StrokeEngine::getPattern()
+int StrokeEngine::getCurrentPattern()
 {
   return _patternIndex;
 }

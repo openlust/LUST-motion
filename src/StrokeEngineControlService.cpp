@@ -57,15 +57,23 @@ SE_CONTROL_SETTINGS_SOCKET_PATH)*/
 
 void StrokeEngineControlService::begin()
 {
-    // onConfigUpdated();
+    _state.go = false;
+    _state.depth = MOTION_FACTORY_TRAVEL;
+    _state.stroke = MOTION_FACTORY_STROKE;
+    _state.rate = MOTION_FACTORY_RATE;
+    _state.sensation = MOTION_FACTORY_SENSATION;
+    _state.pattern = MOTION_FACTORY_PATTERN;
+    _state.vibrationOverride = false;
+    _state.vibrationAmplitude = MOTION_FACTORY_VIBRATION_AMPLITUDE;
+    _state.vibrationFrequency = MOTION_FACTORY_VIBRATION_FREQUENCY;
 }
 
 void StrokeEngineControlService::onConfigUpdated()
 {
-    _strokeEngine->setParameter(StrokeParameter::DEPTH, _state.depth, true);
-    _strokeEngine->setParameter(StrokeParameter::STROKE, _state.stroke, true);
-    _strokeEngine->setParameter(StrokeParameter::RATE, _state.rate, true);
-    _strokeEngine->setParameter(StrokeParameter::SENSATION, _state.sensation, true);
+    _state.depth = _strokeEngine->setParameter(StrokeParameter::DEPTH, _state.depth, true);
+    _state.stroke = _strokeEngine->setParameter(StrokeParameter::STROKE, _state.stroke, true);
+    _state.rate = _strokeEngine->setParameter(StrokeParameter::RATE, _state.rate, true);
+    _state.sensation = _strokeEngine->setParameter(StrokeParameter::SENSATION, _state.sensation, true);
     _strokeEngine->setPattern(_state.pattern, true);
     if (_state.go == true)
     {

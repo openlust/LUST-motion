@@ -89,14 +89,14 @@ public:
         // All parameters will be cropped or sanitized inside StrokeEngine
         // TODO: Now the potentially out of boundary parameters are propagated instead of the sanitized values.
         newSettings.go = root["go"] | false;
-        newSettings.depth = root["depth"] | MOTION_FACTORY_TRAVEL;
-        newSettings.stroke = root["stroke"] | MOTION_FACTORY_STROKE;
-        newSettings.rate = root["rate"] | MOTION_FACTORY_RATE;
-        newSettings.sensation = root["sensation"] | MOTION_FACTORY_SENSATION;
-        newSettings.pattern = root["pattern"] | MOTION_FACTORY_PATTERN; // TODO: ignore when out available instead of default
+        newSettings.depth = root["depth"];
+        newSettings.stroke = root["stroke"];
+        newSettings.rate = root["rate"];
+        newSettings.sensation = root["sensation"];
+        newSettings.pattern = root["pattern"].as<String>();
         newSettings.vibrationOverride = root["vibration_override"] | false;
-        newSettings.vibrationAmplitude = root["vibration_amplitude"] | MOTION_FACTORY_VIBRATION_AMPLITUDE;
-        newSettings.vibrationFrequency = root["vibration_frequency"] | MOTION_FACTORY_VIBRATION_FREQUENCY;
+        newSettings.vibrationAmplitude = root["vibration_amplitude"];
+        newSettings.vibrationFrequency = root["vibration_frequency"];
 
         if (newSettings == settings)
         {

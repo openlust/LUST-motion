@@ -321,11 +321,15 @@
 					<Stop class="mr-2 h-5 w-5" /><span>Stop</span>
 				{/if}
 			</button>
-			<select class="select select-primary w-52">
-				<option>Depth Adjustment</option>
+			<select
+				class="select select-primary w-52"
+				bind:value={controlState.pattern}
+				on:change={sendControl}
+			>
+				<option>DepthAdjustment</option>
 				<option>Streaming</option>
-				<option>Pounding or Teasing</option>
-				<option>Robo Stroke</option>
+				<option>PoundingTeasing</option>
+				<option>RoboStroke</option>
 				<option>Half'n'Half</option>
 				<option>Deeper</option>
 				<option>Stop'n'Go</option>

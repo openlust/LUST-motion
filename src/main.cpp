@@ -126,6 +126,21 @@ void setup()
     // start serial and filesystem
     Serial.begin(SERIAL_BAUD_RATE);
 
+#ifdef VIRTUAL
+    motor.begin(printSpeedPositionOnSerial, 20);
+#else
+    motor.begin();
+    motor.attachPositionFeedback(printSpeedPositionOnSerial, 20);
+    motor.setSensoredHoming(OSSM[0].pin.lmt1, INPUT_PULLUP, true);
+#endif
+    motor.setMaxSpeed(MAX_SPEED);     // 2 m/s
+    motor.setMaxAcceleration(100000); // 100 m/s^2
+    motor.setMachineGeometry(160.0, 5.0);
+
+    Stroker.attachMotor(&motor);
+    motor.enable();
+    motor.home();
+
     // start the framework and LUST-motion
     esp32sveltekit.setMDNSAppName("LUST-motion");
     esp32sveltekit.begin();
@@ -144,20 +159,6 @@ void setup()
     // start the server
     server.begin();
 
-#ifdef VIRTUAL
-    motor.begin(printSpeedPositionOnSerial, 20);
-#else
-    motor.begin();
-    motor.attachPositionFeedback(printSpeedPositionOnSerial, 20);
-    motor.setSensoredHoming(OSSM[0].pin.lmt1, INPUT_PULLUP, true);
-#endif
-    motor.setMaxSpeed(MAX_SPEED);     // 2 m/s
-    motor.setMaxAcceleration(100000); // 100 m/s^2
-    motor.setMachineGeometry(160.0, 5.0);
-
-    Stroker.attachMotor(&motor);
-    motor.enable();
-    motor.home();
     // motor.home(homingNotification);
 
     // Send available patterns as JSON
