@@ -37,14 +37,13 @@ The main control API to control LUST-motion. Starts and stops the motion, change
 | sensation | number | -100.0 - +100.0  | affects the feeling of a pattern                                                                                       | truncated into range |
 | pattern   | string | -                | name of a pattern in the pattern array returned by [StrokeEngine Environment API](#strokeengine-environment-read-only) | ignored              |
 
-|    Command    | Description                                                                                                                                                                                |
-| :-----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-|    "STOP"     | Stops the machine instantly                                                                                                                                                                |
-|   "retract"   | Moves the endeffector to the far end (home position) with a safe speed                                                                                                                     |
-|    "depth"    | Retracts the motor to the home position with the ease-in speed. This is the default state after the motor is homed.                                                                        |
-|   "stroke"    | Moves the motor to the depth-stroke position a.k.a. the start of the stroke with the ease-in speed. Whenever the parameter stroke is changed, the motor will move to the new depth-stroke. |
-| "playpattern" | Starts the pattern generator and runs the pattern.                                                                                                                                         |
-|   "stream"    | Starts the stream input and interprets as relative positions on the scale [0.0 - 1.0] which are mapped to [depth, depth-stroke].                                                           |
+|  Command  | Description                                                                                                                                                                                |
+| :-------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+|  "STOP"   | Stops the machine instantly                                                                                                                                                                |
+| "retract" | Moves the endeffector to the far end (home position) with a safe speed                                                                                                                     |
+|  "depth"  | Retracts the motor to the home position with the ease-in speed. This is the default state after the motor is homed.                                                                        |
+| "stroke"  | Moves the motor to the depth-stroke position a.k.a. the start of the stroke with the ease-in speed. Whenever the parameter stroke is changed, the motor will move to the new depth-stroke. |
+| "pattern" | Starts the pattern generator and runs the pattern.                                                                                                                                         |
 
 #### JSON
 
@@ -56,6 +55,31 @@ The main control API to control LUST-motion. Starts and stops the motion, change
     "rate": 30.0,
     "sensation": 0.0,
     "pattern": "Deeper"
+}
+```
+
+### Safestate Service
+
+The safe state service acts as a central service to enable / disable all motion. It can also act as a heartbeat. If `"safestate" = false` is not renewed at least every second it automatically enters safe state and disables all outputs. This behavior can be configured in [StrokeEngine Safety Limits](#StrokEngine-Safety-Limits). There also the various heartbeat modes are specified.
+
+> Defined in `SafeStateService.h`
+
+| Method | URL             | retained |
+| ------ | --------------- | -------- |
+| GET    | /rest/safestate |          |
+| POST   | /rest/safestate |          |
+| EVENT  | `safestate`     |          |
+| MQTT   | -               | yes      |
+
+| Parameter | Type    | Range           | Info                                                                                                                             | Failure Mode |
+| --------- | ------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| safestate | boolean | `true`, `false` | A safestate stops any pattern, and burst immediately. New bursts are not accepted. Actions will be executed, but have no effect. | true         |
+
+**JSON**
+
+```JSON
+{
+    "safestate": false
 }
 ```
 
@@ -137,55 +161,6 @@ This API will provide the information about the environment like maximum travel 
 
 Environment messages are always send with the flag `retain` and QoS = 1 to make it available for all new consumers. Environment messages are sent out whenever it connects to the broker or the topic is reconfigured. Additionally a MQTT client may request an environment JSON by sending a payload with "environment" to the environment topic.
 
-### StrokeEngine Streaming Configuration
-
-sdfsdfsdf
-
-> Defined in `StrokeEngineStreamingConfig.h`
-
-| Method | URL                | Authentication  |
-| ------ | ------------------ | --------------- |
-| GET    | /rest/streamconfig | `NONE_REQUIRED` |
-| POST   | /rest/streamconfig | `NONE_REQUIRED` |
-
-| Parameter | Type   | Info                                                                                                                                      |
-| --------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| source    | string | Select the streaming source: T-Code (`usb`), MultiFunPlayer (`udp`), [Streaming Service](#strokeengine-streaming-write-only) (`stateful`) |
-| motion    | string | How the motion between two points should be interpreted: `piecewise`, `trapezoidal`                                                       |
-
-#### JSON
-
-```JSON
-{
-    "source": "usb",
-    "motion": "piecewise"
-}
-```
-
-### StrokeEngine Streaming _write-only_
-
-Instead of pattern the motion commands can be provided via this streaming interface, too. Messages are queued up with a queue length of 5. Writing to a full queue will result in the message being discarded. An empty queue will stop the motion. Changing `command` in the [Control API](#strokeengine-control) will erase the queue. That way streaming always starts with a fresh queue. This service is write only. Changes won't propagate to other clients and a GET request will return an empty JSON.
-
-> Defined in `StrokeEngineStreamingService.h`
-
-| Method | URL             | Authentication  |
-| ------ | --------------- | --------------- |
-| POST   | /rest/streaming | `NONE_REQUIRED` |
-
-| Parameter | Type   | Range     | Info                                                                                       | Failure Mode         |
-| --------- | ------ | --------- | ------------------------------------------------------------------------------------------ | -------------------- |
-| position  | number | 0.0 - 1.0 | relative length of the stroke, mapped to the true stroke length set by the control message | truncated into range |
-| duration  | number | 1 - 60000 | duration of the stroke in milliseconds (optional)                                          | truncated into range |
-
-#### JSON
-
-```JSON
-{
-    "position": 0.85,
-    "duration": 2210
-}
-```
-
 ### Motor Configuration
 
 This REST endpoint configures the motor driver and important parameters during runtime. It starts with the `VIRTUAL` driver by default. The available driver depend on the hardware and build target.
@@ -237,9 +212,9 @@ This REST endpoint configures the motor driver and important parameters during r
 
 A constant stream of position, velocity and other parameters are available through the event socket. These contain an array of several data points for a given time slot. Typically 5 data points are aggregated into one message to reduce the message rate. This can be used as a direct user feedback of what is happening with the machine.
 
-| Method | URL    | Authentication     |
-| ------ | ------ | ------------------ |
-| EVENT  | `data` | `IS_AUTHENTICATED` |
+| Method | URL       | Authentication     |
+| ------ | --------- | ------------------ |
+| EVENT  | `rawdata` | `IS_AUTHENTICATED` |
 
 | Parameter | Type         | Info                                      |
 | --------- | ------------ | ----------------------------------------- |
@@ -253,7 +228,7 @@ A constant stream of position, velocity and other parameters are available throu
 
 The following events are available for subscription:
 
-| Event       | Message                        | Update | Info                                                                                                   |
-| ----------- | ------------------------------ | ------ | ------------------------------------------------------------------------------------------------------ |
-| `motor`     | `{"homed":true,"error":false}` | 500 ms | Wether the motor is currently homed or in an error state                                               |
-| `heartbeat` | number                         | change | heartbeat mode. If > 0 the control message must be sent every second, regardless wether it has changed |
+| Event       | Message                        | Update | Info                                                                                                     |
+| ----------- | ------------------------------ | ------ | -------------------------------------------------------------------------------------------------------- |
+| `motor`     | `{"homed":true,"error":false}` | 500 ms | Wether the motor is currently homed or in an error state                                                 |
+| `heartbeat` | number                         | change | heartbeat mode. If > 0 the safestate message must be sent every second, regardless wether it has changed |
