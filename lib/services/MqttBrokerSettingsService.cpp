@@ -42,5 +42,5 @@ void MqttBrokerSettingsService::begin()
 
 void MqttBrokerSettingsService::onConfigUpdated()
 {
-    _mqttSettingsService->setStatusTopic(_state.stateTopic);
+    _mqttSettingsService->setStatusTopic(_state.stateTopicPub);
 }

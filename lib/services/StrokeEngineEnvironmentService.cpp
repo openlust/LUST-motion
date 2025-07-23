@@ -32,7 +32,7 @@ void StrokeEngineEnvironmentService::begin()
 
     String environmentTopic;
     _mqttBrokerSettingsService->read([&](MqttBrokerSettings &settings)
-                                     { environmentTopic = settings.environmentTopic; });
+                                     { environmentTopic = settings.environmentTopicPub; });
 
     // publish the environment on every change of a broker setting
     _mqttBrokerSettingsService->addUpdateHandler([&](const String &originId)
@@ -63,7 +63,7 @@ void StrokeEngineEnvironmentService::mqttPublishEnvironment(bool session)
     // get the environment topic
     String environmentTopic;
     _mqttBrokerSettingsService->read([&](MqttBrokerSettings &settings)
-                                     { environmentTopic = settings.environmentTopic; });
+                                     { environmentTopic = settings.environmentTopicPub; });
 
     // publish the environment
     _mqttClient->publish(environmentTopic.c_str(), 1, true, payloadString.c_str());

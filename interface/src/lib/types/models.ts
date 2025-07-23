@@ -56,15 +56,13 @@ export type ApSettings = {
 	subnet_mask: string;
 };
 
-export type LightState = {
-	led_on: boolean;
-};
-
 export type BrokerSettings = {
-	control_topic: string;
-	environment_topic: string;
-	streaming_topic: string;
 	status_topic: string;
+	control_topic_pub: string;
+	control_topic_sub: string;
+	environment_topic_pub: string;
+	safestate_topic_pub: string;
+	safestate_topic_sub: string;
 };
 
 export type NTPStatus = {

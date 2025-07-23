@@ -68,8 +68,6 @@ const String strokeCommandTable[] = {
     "depth",
     "stroke",
     "pattern",
-    "strokestream",
-    "positionstream",
 };
 
 class StrokeEngineControl

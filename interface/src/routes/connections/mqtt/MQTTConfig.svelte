@@ -31,9 +31,12 @@
 	}
 
 	let formErrors = {
-		control: false,
+		status: false,
+		control_pub: false,
+		control_sub: false,
 		environment: false,
-		streaming: false
+		safestate_pub: false,
+		safestate_sub: false
 	};
 
 	async function postBrokerSettings() {
@@ -60,42 +63,73 @@
 
 	function handleSubmitBroker() {
 		let valid = true;
+		// Validate control topic
+		if (
+			brokerSettings.control_topic_pub.length > 64 ||
+			brokerSettings.control_topic_pub.includes('#') ||
+			brokerSettings.control_topic_pub.includes('+')
+		) {
+			valid = false;
+			formErrors.control_pub = true;
+		} else {
+			formErrors.control_pub = false;
+		}
 
 		// Validate control topic
-		if (brokerSettings.control_topic.length > 64) {
+		if (brokerSettings.control_topic_sub.length > 64) {
 			valid = false;
-			formErrors.control = true;
+			formErrors.control_sub = true;
 		} else {
-			formErrors.control = false;
+			formErrors.control_sub = false;
 		}
 
 		// Validate environment topic
-		if (brokerSettings.environment_topic.length > 64) {
+		if (
+			brokerSettings.environment_topic_pub.length > 64 ||
+			brokerSettings.environment_topic_pub.includes('#') ||
+			brokerSettings.environment_topic_pub.includes('+')
+		) {
 			valid = false;
 			formErrors.environment = true;
 		} else {
 			formErrors.environment = false;
 		}
-		// Validate streaming topic
-		if (brokerSettings.streaming_topic.length > 64) {
+
+		// Validate safestate topic
+		if (
+			brokerSettings.safestate_topic_pub.length > 64 ||
+			brokerSettings.safestate_topic_pub.includes('#') ||
+			brokerSettings.safestate_topic_pub.includes('+')
+		) {
 			valid = false;
-			formErrors.streaming = true;
+			formErrors.safestate_pub = true;
 		} else {
-			formErrors.streaming = false;
+			formErrors.safestate_pub = false;
+		}
+
+		// Validate safestate topic
+		if (brokerSettings.safestate_topic_sub.length > 64) {
+			valid = false;
+			formErrors.safestate_sub = true;
+		} else {
+			formErrors.safestate_sub = false;
 		}
 
 		// Validate MQTT Status Topic
-		if (brokerSettings.status_topic.length > 64) {
+		if (
+			brokerSettings.status_topic.length > 64 ||
+			brokerSettings.status_topic.includes('#') ||
+			brokerSettings.status_topic.includes('+')
+		) {
 			valid = false;
-			formErrors.status_topic = true;
+			formErrors.status = true;
 		} else {
-			formErrors.status_topic = false;
+			formErrors.status = false;
 		}
 
 		// Submit JSON to REST API
 		if (valid) {
 			postBrokerSettings();
-			//alert('Form Valid');
 		}
 	}
 
@@ -128,42 +162,83 @@
 				<div class="alert alert-info my-2 shadow-lg">
 					<Info class="h-6 w-6 shrink-0 stroke-current" />
 					<span
-						>Please provide MQTT topics for the different control messages. Wildcards are not /
-						should be avoided.
+						>Please provide MQTT topics for the different control messages. Wildcards are only
+						supported for subscription (set) topics. The use of wildcards for publishing (status)
+						topics is not supported.
 					</span>
 				</div>
 				<div class="grid w-full grid-cols-1 content-center gap-x-4 gap-y-2 px-4">
 					<div>
+						<label class="label" for="status_topic">MQTT Status Topic</label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.status
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.status_topic}
+							id="status_topic"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="status_topic">
+							<span class="text-error {formErrors.status ? '' : 'hidden'}"
+								>MQTT status topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
 						<label class="label" for="control">
-							<span class="label-text text-md">Control Topic</span>
+							<span class="label-text text-md">Control Status Topic</span>
 						</label>
 						<input
 							type="text"
-							class="input w-full invalid:border-error w-full invalid:border-2 {formErrors.control
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.control_pub
 								? 'border-error border-2'
 								: ''}"
-							bind:value={brokerSettings.control_topic}
+							bind:value={brokerSettings.control_topic_pub}
 							id="control"
 							min="0"
 							max="64"
 							required
 						/>
 						<label class="label" for="control">
-							<span class="label-text-alt text-error {formErrors.control ? '' : 'hidden'}"
+							<span class="label-text-alt text-error {formErrors.control_pub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="control">
+							<span class="label-text text-md">Control Set Topic</span>
+						</label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.control_sub
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.control_topic_sub}
+							id="control"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="control">
+							<span class="label-text-alt text-error {formErrors.control_sub ? '' : 'hidden'}"
 								>MQTT topic is limited to 64 characters</span
 							>
 						</label>
 					</div>
 					<div>
 						<label class="label" for="environment">
-							<span class="label-text text-md">Environment Topic</span>
+							<span class="label-text text-md">Environment Status Topic</span>
 						</label>
 						<input
 							type="text"
-							class="input w-full invalid:border-error w-full invalid:border-2 {formErrors.environment
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.environment
 								? 'border-error border-2'
 								: ''}"
-							bind:value={brokerSettings.environment_topic}
+							bind:value={brokerSettings.environment_topic_pub}
 							id="environment"
 							min="0"
 							max="64"
@@ -176,42 +251,40 @@
 						</label>
 					</div>
 					<div>
-						<label class="label" for="streaming">
-							<span class="label-text text-md">Streaming Topic</span>
-						</label>
+						<label class="label" for="safestate">Safe State Status Topic </label>
 						<input
 							type="text"
-							class="input w-full invalid:border-error w-full invalid:border-2 {formErrors.streaming
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.safestate_pub
 								? 'border-error border-2'
 								: ''}"
-							bind:value={brokerSettings.streaming_topic}
-							id="streaming"
+							bind:value={brokerSettings.safestate_topic_pub}
+							id="safestate"
 							min="0"
 							max="64"
 							required
 						/>
-						<label class="label" for="streaming">
-							<span class="label-text-alt text-error {formErrors.streaming ? '' : 'hidden'}"
+						<label class="label" for="safestate">
+							<span class=" text-error {formErrors.safestate_pub ? '' : 'hidden'}"
 								>MQTT topic is limited to 64 characters</span
 							>
 						</label>
 					</div>
 					<div>
-						<label class="label" for="status_topic">MQTT Status Topic</label>
+						<label class="label" for="safestate_sub">Safe State Set Topic (Heartbeat) </label>
 						<input
 							type="text"
-							class="input w-full invalid:border-error invalid:border-2 {formErrors.status_topic
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.safestate_sub
 								? 'border-error border-2'
 								: ''}"
-							bind:value={brokerSettings.status_topic}
-							id="status_topic"
+							bind:value={brokerSettings.safestate_topic_sub}
+							id="safestate_sub"
 							min="0"
 							max="64"
 							required
 						/>
-						<label class="label" for="status_topic">
-							<span class="text-error {formErrors.status_topic ? '' : 'hidden'}"
-								>MQTT status topic is limited to 64 characters</span
+						<label class="label" for="safestate_sub">
+							<span class=" text-error {formErrors.safestate_sub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
 							>
 						</label>
 					</div>

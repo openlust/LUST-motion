@@ -30,31 +30,31 @@
 class MqttBrokerSettings
 {
 public:
-    String controlTopic;
-    String environmentTopic;
-    String streamingTopic;
-    String stateTopic;
+    String controlTopicPub;
+    String controlTopicSub;
+    String environmentTopicPub;
+    String stateTopicPub;
     String safeStateTopicPub;
     String safeStateTopicSub;
 
     static void read(MqttBrokerSettings &settings, JsonObject &root)
     {
-        root["control_topic"] = settings.controlTopic;
-        root["environment_topic"] = settings.environmentTopic;
-        root["streaming_topic"] = settings.streamingTopic;
-        root["status_topic"] = settings.stateTopic;
+        root["status_topic"] = settings.stateTopicPub;
+        root["control_topic_pub"] = settings.controlTopicPub;
+        root["control_topic_sub"] = settings.controlTopicSub;
+        root["environment_topic_pub"] = settings.environmentTopicPub;
         root["safestate_topic_pub"] = settings.safeStateTopicPub;
         root["safestate_topic_sub"] = settings.safeStateTopicSub;
     }
 
     static StateUpdateResult update(JsonObject &root, MqttBrokerSettings &settings)
     {
-        settings.controlTopic = root["control_topic"] | SettingValue::format("lust-motion/#{unique_id}/control");
-        settings.environmentTopic = root["environment_topic"] | SettingValue::format("lust-motion/#{unique_id}/environment");
-        settings.streamingTopic = root["streaming_topic"] | SettingValue::format("lust-motion/#{unique_id}/streaming");
-        settings.stateTopic = root["status_topic"] | SettingValue::format(FACTORY_MQTT_STATUS_TOPIC);
-        settings.safeStateTopicPub = root["safestate_topic_pub"] | SettingValue::format("lust-motion/#{unique_id}/safestate/sub");
-        settings.safeStateTopicSub = root["safestate_topic_sub"] | SettingValue::format("lust-motion/#{unique_id}/safestate/pub");
+        settings.controlTopicPub = root["control_topic_pub"] | SettingValue::format("lust-motion/#{unique_id}/control/status");
+        settings.controlTopicSub = root["control_topic_sub"] | SettingValue::format("lust-motion/#{unique_id}/control/set");
+        settings.environmentTopicPub = root["environment_topic_pub"] | SettingValue::format("lust-motion/#{unique_id}/environment/status");
+        settings.stateTopicPub = root["status_topic"] | SettingValue::format(FACTORY_MQTT_STATUS_TOPIC);
+        settings.safeStateTopicPub = root["safestate_topic_pub"] | SettingValue::format("lust-motion/#{unique_id}/safestate/status");
+        settings.safeStateTopicSub = root["safestate_topic_sub"] | SettingValue::format("lust-motion/#{unique_id}/safestate/set");
 
         return StateUpdateResult::CHANGED;
     }

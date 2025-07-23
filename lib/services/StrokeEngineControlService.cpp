@@ -44,10 +44,12 @@ void StrokeEngineControlService::begin()
     _httpEndpoint.begin();
     _eventEndpoint.begin();
 
-    String controlTopic;
+    String controlTopicPub;
+    String controlTopicSub;
     _mqttBrokerSettingsService->read([&](MqttBrokerSettings &settings)
-                                     { controlTopic = settings.controlTopic; });
-    _mqttEndpoint.configureTopics(controlTopic.c_str(), controlTopic.c_str());
+                                     {  controlTopicPub = settings.controlTopicPub;
+                                        controlTopicSub = settings.controlTopicSub; });
+    _mqttEndpoint.configureTopics(controlTopicPub.c_str(), controlTopicSub.c_str());
 
     _state.command = "STOP";
     _state.depth = _strokeEngine->getParameter(StrokeParameter::DEPTH);
