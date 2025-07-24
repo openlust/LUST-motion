@@ -9,33 +9,36 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
  **/
 
 #include <WiFi.h>
-#include <AsyncTCP.h>
 
 #include <ArduinoJson.h>
-#include <AsyncJson.h>
-#include <ESPAsyncWebServer.h>
+#include <PsychicHttp.h>
 #include <IPAddress.h>
 #include <SecurityManager.h>
 #include <APSettingsService.h>
 
-#define MAX_AP_STATUS_SIZE 1024
 #define AP_STATUS_SERVICE_PATH "/rest/apStatus"
 
 class APStatus
 {
 public:
-    APStatus(AsyncWebServer *server, SecurityManager *securityManager, APSettingsService *apSettingsService);
+    APStatus(PsychicHttpServer *server, SecurityManager *securityManager, APSettingsService *apSettingsService);
+
+    void begin();
+
+    bool isActive();
 
 private:
+    PsychicHttpServer *_server;
+    SecurityManager *_securityManager;
     APSettingsService *_apSettingsService;
-    void apStatus(AsyncWebServerRequest *request);
+    esp_err_t apStatus(PsychicRequest *request);
 };
 
 #endif // end APStatus_h

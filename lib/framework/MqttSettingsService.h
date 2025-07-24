@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -18,8 +18,10 @@
 #include <StatefulService.h>
 #include <HttpEndpoint.h>
 #include <FSPersistence.h>
-#include <AsyncMqttClient.h>
+#include <PsychicMqttClient.h>
 #include <SettingValue.h>
+#include <WiFi.h>
+#include <MqttEndpoint.h>
 
 #ifndef FACTORY_MQTT_ENABLED
 #define FACTORY_MQTT_ENABLED false
@@ -45,6 +47,10 @@
 #define FACTORY_MQTT_CLIENT_ID "#{platform}-#{unique_id}"
 #endif
 
+#ifndef FACTORY_MQTT_STATUS_TOPIC
+#define FACTORY_MQTT_STATUS_TOPIC "#{platform}/#{unique_id}/status"
+#endif
+
 #ifndef FACTORY_MQTT_KEEP_ALIVE
 #define FACTORY_MQTT_KEEP_ALIVE 16
 #endif
@@ -57,6 +63,10 @@
 #define FACTORY_MQTT_MAX_TOPIC_LENGTH 128
 #endif
 
+#ifndef FACTORY_MQTT_MIN_MESSAGE_INTERVAL_MS
+#define FACTORY_MQTT_MIN_MESSAGE_INTERVAL_MS 500
+#endif
+
 #define MQTT_SETTINGS_FILE "/config/mqttSettings.json"
 #define MQTT_SETTINGS_SERVICE_PATH "/rest/mqttSettings"
 
@@ -67,8 +77,7 @@ class MqttSettings
 public:
     // host and port - if enabled
     bool enabled;
-    String host;
-    uint16_t port;
+    String uri;
 
     // username and password
     String username;
@@ -80,32 +89,33 @@ public:
     // connection settings
     uint16_t keepAlive;
     bool cleanSession;
-    uint16_t maxTopicLength;
 
-    static void read(MqttSettings &settings, JsonObject &root)
+    // Publish rate limiting
+    uint32_t messageIntervalMs;
+
+    static void
+    read(MqttSettings &settings, JsonObject &root)
     {
         root["enabled"] = settings.enabled;
-        root["host"] = settings.host;
-        root["port"] = settings.port;
+        root["uri"] = settings.uri;
         root["username"] = settings.username;
         root["password"] = settings.password;
         root["client_id"] = settings.clientId;
         root["keep_alive"] = settings.keepAlive;
         root["clean_session"] = settings.cleanSession;
-        root["max_topic_length"] = settings.maxTopicLength;
+        root["message_interval_ms"] = settings.messageIntervalMs;
     }
 
     static StateUpdateResult update(JsonObject &root, MqttSettings &settings)
     {
         settings.enabled = root["enabled"] | FACTORY_MQTT_ENABLED;
-        settings.host = root["host"] | FACTORY_MQTT_HOST;
-        settings.port = root["port"] | FACTORY_MQTT_PORT;
+        settings.uri = root["uri"] | FACTORY_MQTT_URI;
         settings.username = root["username"] | SettingValue::format(FACTORY_MQTT_USERNAME);
         settings.password = root["password"] | FACTORY_MQTT_PASSWORD;
         settings.clientId = root["client_id"] | SettingValue::format(FACTORY_MQTT_CLIENT_ID);
         settings.keepAlive = root["keep_alive"] | FACTORY_MQTT_KEEP_ALIVE;
         settings.cleanSession = root["clean_session"] | FACTORY_MQTT_CLEAN_SESSION;
-        settings.maxTopicLength = root["max_topic_length"] | FACTORY_MQTT_MAX_TOPIC_LENGTH;
+        settings.messageIntervalMs = root["message_interval_ms"] | FACTORY_MQTT_MIN_MESSAGE_INTERVAL_MS;
         return StateUpdateResult::CHANGED;
     }
 };
@@ -113,7 +123,7 @@ public:
 class MqttSettingsService : public StatefulService<MqttSettings>
 {
 public:
-    MqttSettingsService(AsyncWebServer *server, FS *fs, SecurityManager *securityManager);
+    MqttSettingsService(PsychicHttpServer *server, FS *fs, SecurityManager *securityManager);
     ~MqttSettingsService();
 
     void begin();
@@ -121,38 +131,43 @@ public:
     bool isEnabled();
     bool isConnected();
     const char *getClientId();
-    AsyncMqttClientDisconnectReason getDisconnectReason();
-    AsyncMqttClient *getMqttClient();
+    String getLastError();
+    void setStatusTopic(String statusTopic);
+    String getStatusTopic();
+    PsychicMqttClient *getMqttClient();
+    void disconnect();
 
 protected:
     void onConfigUpdated();
 
 private:
+    PsychicHttpServer *_server;
+    SecurityManager *_securityManager;
     HttpEndpoint<MqttSettings> _httpEndpoint;
     FSPersistence<MqttSettings> _fsPersistence;
 
     // Pointers to hold retained copies of the mqtt client connection strings.
-    // This is required as AsyncMqttClient holds refrences to the supplied connection strings.
+    // This is required as AsyncMqttClient holds references to the supplied connection strings.
     char *_retainedHost;
     char *_retainedClientId;
     char *_retainedUsername;
     char *_retainedPassword;
+    char *_retainedWillTopic = nullptr;
+    const char *_retainedWillPayload = "offline";
 
     // variable to help manage connection
     bool _reconfigureMqtt;
-    unsigned long _disconnectedAt;
-
-    // connection status
-    AsyncMqttClientDisconnectReason _disconnectReason;
+    String _lastError;
 
     // the MQTT client instance
-    AsyncMqttClient _mqttClient;
+    PsychicMqttClient _mqttClient;
 
     void onStationModeGotIP(WiFiEvent_t event, WiFiEventInfo_t info);
     void onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info);
 
     void onMqttConnect(bool sessionPresent);
-    void onMqttDisconnect(AsyncMqttClientDisconnectReason reason);
+    void onMqttDisconnect(bool sessionPresent);
+    void onMqttError(esp_mqtt_error_codes_t error);
     void configureMqtt();
 };
 

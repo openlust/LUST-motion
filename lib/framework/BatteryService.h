@@ -7,35 +7,36 @@
  *   with responsive Sveltekit front-end built with TailwindCSS and DaisyUI.
  *   https://github.com/theelims/ESP32-sveltekit
  *
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
  **/
 
+#include <EventSocket.h>
 #include <JsonUtils.h>
-#include <NotificationEvents.h>
+
+#define EVENT_BATTERY "battery"
 
 class BatteryService
 {
 public:
-    BatteryService(NotificationEvents *notificationEvents);
+    BatteryService(EventSocket *socket);
 
-    void updateSOC(float stateOfCharge)
-    {
-        _lastSOC = (int)round(stateOfCharge);
-        batteryEvent();
-    }
+    void begin();
 
-    void setCharging(boolean isCharging)
-    {
-        _isCharging = isCharging;
-        batteryEvent();
-    }
+    void updateSOC(float stateOfCharge);
+
+    void setCharging(boolean isCharging);
+
+    boolean isCharging();
+
+    int getSOC();
 
 private:
-    void batteryEvent();
-    NotificationEvents *_notificationEvents;
+    EventSocket *_socket;
     int _lastSOC = 100;
     boolean _isCharging = false;
+
+    void batteryEvent();
 };

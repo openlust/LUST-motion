@@ -5,7 +5,7 @@
  *   with responsive Sveltekit front-end built with TailwindCSS and DaisyUI.
  *   https://github.com/theelims/ESP32-sveltekit
  *
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -13,18 +13,42 @@
 
 #include <BatteryService.h>
 
-BatteryService::BatteryService(NotificationEvents *notificationEvents)
+BatteryService::BatteryService(EventSocket *socket) : _socket(socket)
 {
-    // Store SSE
-    _notificationEvents = notificationEvents;
+}
+
+void BatteryService::updateSOC(float stateOfCharge)
+{
+    _lastSOC = (int)round(stateOfCharge);
+    batteryEvent();
+}
+
+void BatteryService::setCharging(boolean isCharging)
+{
+    _isCharging = isCharging;
+    batteryEvent();
+}
+
+boolean BatteryService::isCharging()
+{
+    return _isCharging;
+}
+
+int BatteryService::getSOC()
+{
+    return _lastSOC;
+}
+
+void BatteryService::begin()
+{
+    _socket->registerEvent(EVENT_BATTERY);
 }
 
 void BatteryService::batteryEvent()
 {
-    StaticJsonDocument<32> doc;
-    String message;
+    JsonDocument doc;
     doc["soc"] = _lastSOC;
     doc["charging"] = _isCharging;
-    serializeJson(doc, message);
-    _notificationEvents->send(message, "battery", millis());
+    JsonObject jsonObject = doc.as<JsonObject>();
+    _socket->emitEvent(EVENT_BATTERY, jsonObject);
 }

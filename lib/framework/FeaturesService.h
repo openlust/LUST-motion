@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -18,13 +18,13 @@
 #include <Features.h>
 
 #include <WiFi.h>
-#include <AsyncTCP.h>
 #include <ArduinoJson.h>
-#include <AsyncJson.h>
-#include <ESPAsyncWebServer.h>
+#include <PsychicHttp.h>
+#include <EventSocket.h>
+#include <vector>
 
-#define MAX_FEATURES_SIZE 256
 #define FEATURES_SERVICE_PATH "/rest/features"
+#define FEATURES_SERVICE_EVENT "features"
 
 typedef struct
 {
@@ -35,13 +35,18 @@ typedef struct
 class FeaturesService
 {
 public:
-    FeaturesService(AsyncWebServer *server);
+    FeaturesService(PsychicHttpServer *server, EventSocket *socket);
+
+    void begin();
 
     void addFeature(String feature, bool enabled);
 
 private:
-    void features(AsyncWebServerRequest *request);
+    PsychicHttpServer *_server;
+    EventSocket *_socket;
     std::vector<UserFeature> userFeatures;
+
+    void createJSON(JsonObject &root);
 };
 
 #endif

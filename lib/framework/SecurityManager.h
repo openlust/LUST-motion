@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -17,17 +17,16 @@
 
 #include <Features.h>
 #include <ArduinoJsonJWT.h>
-#include <ESPAsyncWebServer.h>
-#include <AsyncJson.h>
+#include <PsychicHttp.h>
 #include <list>
+
+#define SVK_TAG "🐼"
 
 #define ACCESS_TOKEN_PARAMATER "access_token"
 
 #define AUTHORIZATION_HEADER "Authorization"
 #define AUTHORIZATION_HEADER_PREFIX "Bearer "
 #define AUTHORIZATION_HEADER_PREFIX_LEN 7
-
-#define MAX_JWT_SIZE 128
 
 class User
 {
@@ -99,24 +98,22 @@ public:
     /*
      * Check the request header for the Authorization token
      */
-    virtual Authentication authenticateRequest(AsyncWebServerRequest *request) = 0;
+    virtual Authentication authenticateRequest(PsychicRequest *request) = 0;
 
     /**
      * Filter a request with the provided predicate, only returning true if the predicate matches.
      */
-    virtual ArRequestFilterFunction filterRequest(AuthenticationPredicate predicate) = 0;
+    virtual PsychicRequestFilterFunction filterRequest(AuthenticationPredicate predicate) = 0;
 
     /**
      * Wrap the provided request to provide validation against an AuthenticationPredicate.
      */
-    virtual ArRequestHandlerFunction wrapRequest(ArRequestHandlerFunction onRequest,
-                                                 AuthenticationPredicate predicate) = 0;
+    virtual PsychicHttpRequestCallback wrapRequest(PsychicHttpRequestCallback onRequest, AuthenticationPredicate predicate) = 0;
 
     /**
      * Wrap the provided json request callback to provide validation against an AuthenticationPredicate.
      */
-    virtual ArJsonRequestHandlerFunction wrapCallback(ArJsonRequestHandlerFunction onRequest,
-                                                      AuthenticationPredicate predicate) = 0;
+    virtual PsychicJsonRequestCallback wrapCallback(PsychicJsonRequestCallback onRequest, AuthenticationPredicate predicate) = 0;
 };
 
 #endif // end SecurityManager_h

@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -14,12 +14,21 @@
 
 #include <WiFiStatus.h>
 
-WiFiStatus::WiFiStatus(AsyncWebServer *server, SecurityManager *securityManager)
+WiFiStatus::WiFiStatus(PsychicHttpServer *server,
+                       SecurityManager *securityManager) : _server(server),
+                                                           _securityManager(securityManager)
 {
-    server->on(WIFI_STATUS_SERVICE_PATH,
-               HTTP_GET,
-               securityManager->wrapRequest(std::bind(&WiFiStatus::wifiStatus, this, std::placeholders::_1),
-                                            AuthenticationPredicates::IS_AUTHENTICATED));
+}
+
+void WiFiStatus::begin()
+{
+    _server->on(WIFI_STATUS_SERVICE_PATH,
+                HTTP_GET,
+                _securityManager->wrapRequest(std::bind(&WiFiStatus::wifiStatus, this, std::placeholders::_1),
+                                              AuthenticationPredicates::IS_AUTHENTICATED));
+
+    ESP_LOGV(SVK_TAG, "Registered GET endpoint: %s", WIFI_STATUS_SERVICE_PATH);
+
     WiFi.onEvent(onStationModeConnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_CONNECTED);
     WiFi.onEvent(onStationModeDisconnected, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_DISCONNECTED);
     WiFi.onEvent(onStationModeGotIP, WiFiEvent_t::ARDUINO_EVENT_WIFI_STA_GOT_IP);
@@ -27,25 +36,35 @@ WiFiStatus::WiFiStatus(AsyncWebServer *server, SecurityManager *securityManager)
 
 void WiFiStatus::onStationModeConnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    Serial.println(F("WiFi Connected."));
+    ESP_LOGI(SVK_TAG, "WiFi Connected.");
+
+#ifdef SERIAL_INFO
+    Serial.println("WiFi Connected.");
+#endif
 }
 
 void WiFiStatus::onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    Serial.print(F("WiFi Disconnected. Reason code="));
+    ESP_LOGI(SVK_TAG, "WiFi Disconnected. Reason code=%d", info.wifi_sta_disconnected.reason);
+
+#ifdef SERIAL_INFO
+    Serial.print("WiFi Disconnected. Reason code=");
     Serial.println(info.wifi_sta_disconnected.reason);
+#endif
 }
 
 void WiFiStatus::onStationModeGotIP(WiFiEvent_t event, WiFiEventInfo_t info)
 {
-    Serial.printf_P(
-        PSTR("WiFi Got IP. localIP=%s, hostName=%s\r\n"), WiFi.localIP().toString().c_str(), WiFi.getHostname());
+    ESP_LOGI(SVK_TAG, "WiFi Got IP. localIP=%s, hostName=%s", WiFi.localIP().toString().c_str(), WiFi.getHostname());
+#ifdef SERIAL_INFO
+    Serial.printf("WiFi Got IP. localIP=%s, hostName=%s\r\n", WiFi.localIP().toString().c_str(), WiFi.getHostname());
+#endif
 }
 
-void WiFiStatus::wifiStatus(AsyncWebServerRequest *request)
+esp_err_t WiFiStatus::wifiStatus(PsychicRequest *request)
 {
-    AsyncJsonResponse *response = new AsyncJsonResponse(false, MAX_WIFI_STATUS_SIZE);
-    JsonObject root = response->getRoot();
+    PsychicJsonResponse response = PsychicJsonResponse(request, false);
+    JsonObject root = response.getRoot();
     wl_status_t status = WiFi.status();
     root["status"] = (uint8_t)status;
     if (status == WL_CONNECTED)
@@ -69,6 +88,11 @@ void WiFiStatus::wifiStatus(AsyncWebServerRequest *request)
             root["dns_ip_2"] = dnsIP2.toString();
         }
     }
-    response->setLength();
-    request->send(response);
+
+    return response.send();
+}
+
+bool WiFiStatus::isConnected()
+{
+    return WiFi.status() == WL_CONNECTED;
 }

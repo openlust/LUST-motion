@@ -1,9 +1,12 @@
 import { writable } from 'svelte/store';
+import type { MotorState, RSSI } from '../types/models';
+import type { Battery } from '../types/models';
+import type { DownloadOTA } from '../types/models';
 
 let telemetry_data = {
-	serverAvailable: true,
 	rssi: {
 		rssi: 0,
+		ssid: '',
 		disconnected: true
 	},
 	battery: {
@@ -14,7 +17,9 @@ let telemetry_data = {
 		status: 'none',
 		progress: 0,
 		error: ''
-	}
+	},
+	homed: false,
+	error: true
 };
 
 function createTelemetry() {
@@ -22,29 +27,37 @@ function createTelemetry() {
 
 	return {
 		subscribe,
-		setRSSI: (data: string) => {
-			if (!isNaN(Number(data))) {
-				update((telemerty_data) => ({
-					...telemerty_data,
-					rssi: { rssi: Number(data), disconnected: false }
+		setRSSI: (data: RSSI) => {
+			if (!isNaN(Number(data.rssi))) {
+				update((telemetry_data) => ({
+					...telemetry_data,
+					rssi: { rssi: Number(data.rssi), ssid: data.ssid, disconnected: false }
 				}));
 			} else {
-				update((telemerty_data) => ({ ...telemerty_data, rssi: { rssi: 0, disconnected: true } }));
+				update((telemetry_data) => ({
+					...telemetry_data,
+					rssi: { rssi: 0, ssid: data.ssid, disconnected: true }
+				}));
 			}
 		},
-		setBattery: (data: string) => {
-			const content = JSON.parse(data);
-			update((telemerty_data) => ({
-				...telemerty_data,
-				battery: { soc: content.soc, charging: content.charging }
+		setBattery: (data: Battery) => {
+			update((telemetry_data) => ({
+				...telemetry_data,
+				battery: { soc: data.soc, charging: data.charging }
 			}));
 		},
-		setDownloadOTA: (data: string) => {
-			const content = JSON.parse(data);
-			update((telemerty_data) => ({
-				...telemerty_data,
-				download_ota: { status: content.status, progress: content.progress, error: content.error }
+		setDownloadOTA: (data: DownloadOTA) => {
+			update((telemetry_data) => ({
+				...telemetry_data,
+				download_ota: { status: data.status, progress: data.progress, error: data.error }
 			}));
+		},
+		setMotorStatus: (data: MotorState) => {
+			update((telemerty_data) => ({ ...telemerty_data, homed: data.homed, error: data.error }));
+		},
+		setMotorError: (data: string) => {
+			const content = JSON.parse(data);
+			update((telemerty_data) => ({ ...telemerty_data, error: content.error }));
 		}
 	};
 }

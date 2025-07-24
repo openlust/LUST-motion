@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -19,30 +19,40 @@
 
 #include <Update.h>
 #include <WiFi.h>
-#include <AsyncTCP.h>
 
-#include <ESPAsyncWebServer.h>
+#include <PsychicHttp.h>
 #include <SecurityManager.h>
 #include <RestartService.h>
 
 #define UPLOAD_FIRMWARE_PATH "/rest/uploadFirmware"
 
+enum FileType
+{
+    ft_none = 0,
+    ft_firmware = 1,
+    ft_md5 = 2
+};
+
 class UploadFirmwareService
 {
 public:
-    UploadFirmwareService(AsyncWebServer *server, SecurityManager *securityManager);
+    UploadFirmwareService(PsychicHttpServer *server, SecurityManager *securityManager);
+
+    void begin();
 
 private:
+    PsychicHttpServer *_server;
     SecurityManager *_securityManager;
-    void handleUpload(AsyncWebServerRequest *request,
-                      const String &filename,
-                      size_t index,
-                      uint8_t *data,
-                      size_t len,
-                      bool final);
-    void uploadComplete(AsyncWebServerRequest *request);
-    void handleError(AsyncWebServerRequest *request, int code);
-    static void handleEarlyDisconnect();
+
+    esp_err_t handleUpload(PsychicRequest *request,
+                           const String &filename,
+                           uint64_t index,
+                           uint8_t *data,
+                           size_t len,
+                           bool final);
+    esp_err_t uploadComplete(PsychicRequest *request);
+    esp_err_t handleError(PsychicRequest *request, int code);
+    esp_err_t handleEarlyDisconnect();
 };
 
 #endif // end UploadFirmwareService_h

@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -14,11 +14,15 @@
 
 #include <APSettingsService.h>
 
-APSettingsService::APSettingsService(AsyncWebServer *server, FS *fs, SecurityManager *securityManager) : _httpEndpoint(APSettings::read, APSettings::update, this, server, AP_SETTINGS_SERVICE_PATH, securityManager),
-                                                                                                         _fsPersistence(APSettings::read, APSettings::update, this, fs, AP_SETTINGS_FILE),
-                                                                                                         _dnsServer(nullptr),
-                                                                                                         _lastManaged(0),
-                                                                                                         _reconfigureAp(false)
+APSettingsService::APSettingsService(PsychicHttpServer *server,
+                                     FS *fs,
+                                     SecurityManager *securityManager) : _server(server),
+                                                                         _securityManager(securityManager),
+                                                                         _httpEndpoint(APSettings::read, APSettings::update, this, server, AP_SETTINGS_SERVICE_PATH, securityManager),
+                                                                         _fsPersistence(APSettings::read, APSettings::update, this, fs, AP_SETTINGS_FILE),
+                                                                         _dnsServer(nullptr),
+                                                                         _lastManaged(0),
+                                                                         _reconfigureAp(false)
 {
     addUpdateHandler([&](const String &originId)
                      { reconfigureAP(); },
@@ -27,6 +31,7 @@ APSettingsService::APSettingsService(AsyncWebServer *server, FS *fs, SecurityMan
 
 void APSettingsService::begin()
 {
+    _httpEndpoint.begin();
     _fsPersistence.readFromFS();
     reconfigureAP();
 }
@@ -40,7 +45,9 @@ void APSettingsService::reconfigureAP()
 
 void APSettingsService::recoveryMode()
 {
-    Serial.println(F("Recovery Mode needed"));
+#ifdef SERIAL_INFO
+    Serial.println("Recovery Mode needed");
+#endif
     _lastManaged = millis() - MANAGE_NETWORK_DELAY;
     _recoveryMode = true;
     _reconfigureAp = true;
@@ -79,14 +86,21 @@ void APSettingsService::manageAP()
 
 void APSettingsService::startAP()
 {
-    Serial.println(F("Starting software access point"));
+#ifdef SERIAL_INFO
+    Serial.println("Starting software access point");
+#endif
     WiFi.softAPConfig(_state.localIP, _state.gatewayIP, _state.subnetMask);
     WiFi.softAP(_state.ssid.c_str(), _state.password.c_str(), _state.channel, _state.ssidHidden, _state.maxClients);
+#if CONFIG_IDF_TARGET_ESP32C3
+    WiFi.setTxPower(WIFI_POWER_8_5dBm); // https://www.wemos.cc/en/latest/c3/c3_mini_1_0_0.html#about-wifi
+#endif
     if (!_dnsServer)
     {
         IPAddress apIp = WiFi.softAPIP();
-        Serial.print(F("Starting captive portal on "));
+#ifdef SERIAL_INFO
+        Serial.print("Starting captive portal on ");
         Serial.println(apIp);
+#endif
         _dnsServer = new DNSServer;
         _dnsServer->start(DNS_PORT, "*", apIp);
     }
@@ -96,12 +110,16 @@ void APSettingsService::stopAP()
 {
     if (_dnsServer)
     {
-        Serial.println(F("Stopping captive portal"));
+#ifdef SERIAL_INFO
+        Serial.println("Stopping captive portal");
+#endif
         _dnsServer->stop();
         delete _dnsServer;
         _dnsServer = nullptr;
     }
-    Serial.println(F("Stopping software access point"));
+#ifdef SERIAL_INFO
+    Serial.println("Stopping software access point");
+#endif
     WiFi.softAPdisconnect(true);
 }
 

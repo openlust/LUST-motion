@@ -7,18 +7,19 @@
  *   with responsive Sveltekit front-end built with TailwindCSS and DaisyUI.
  *   https://github.com/theelims/ESP32-sveltekit
  *
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
  **/
 
 #include <WiFi.h>
-#include <AsyncTCP.h>
 #include <ESPmDNS.h>
 
-#include <ESPAsyncWebServer.h>
+#include <PsychicHttp.h>
 #include <SecurityManager.h>
+#include "driver/rtc_io.h"
+#include <vector>
 
 #define SLEEP_SERVICE_PATH "/rest/sleep"
 
@@ -30,21 +31,37 @@
 #define WAKEUP_SIGNAL 0
 #endif
 
+enum class pinTermination
+{
+    FLOATING,
+    PULL_UP,
+    PULL_DOWN
+};
+
+// typdef for sleep service callback
+typedef std::function<void()> sleepCallback;
+
 class SleepService
 {
 public:
-    SleepService(AsyncWebServer *server, SecurityManager *securityManager);
+    SleepService(PsychicHttpServer *server, SecurityManager *securityManager);
+
+    void begin();
 
     static void sleepNow();
 
-    void attachOnSleepCallback(void (*callbackSleep)())
+    void attachOnSleepCallback(sleepCallback callbackSleep)
     {
-        _callbackSleep = callbackSleep;
+        _sleepCallbacks.push_back(callbackSleep);
     }
 
+    void setWakeUpPin(int pin, bool level, pinTermination termination = pinTermination::FLOATING);
+
 private:
-    void sleep(AsyncWebServerRequest *request);
+    PsychicHttpServer *_server;
+    SecurityManager *_securityManager;
+    esp_err_t sleep(PsychicRequest *request);
 
 protected:
-    static void (*_callbackSleep)();
+    static std::vector<sleepCallback> _sleepCallbacks;
 };

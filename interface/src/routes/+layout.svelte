@@ -4,9 +4,13 @@
 	import { user } from '$lib/stores/user';
 	import { telemetry } from '$lib/stores/telemetry';
 	import { analytics } from '$lib/stores/analytics';
+	import { batteryHistory } from '$lib/stores/battery';
+	import { socket } from '$lib/stores/socket';
+	import { environment } from '$lib/stores/environment';
+	import { safeStateHeartbeat } from '$lib/stores/safestate';
 	import type { userProfile } from '$lib/stores/user';
-	import { page } from '$app/stores';
-	import { Modals, closeModal } from 'svelte-modals';
+	import { page } from '$app/state';
+	import { Modals, modals } from 'svelte-modals';
 	import Toast from '$lib/components/toasts/Toast.svelte';
 	import { notifications } from '$lib/components/toasts/notifications';
 	import { fade } from 'svelte/transition';
@@ -14,26 +18,69 @@
 	import Menu from './menu.svelte';
 	import Statusbar from './statusbar.svelte';
 	import Login from './login.svelte';
+	import type { Analytics, HeartbeatMode } from '$lib/types/models';
+	import type { RSSI } from '$lib/types/models';
+	import type { Battery } from '$lib/types/models';
+	import type { DownloadOTA } from '$lib/types/models';
+	import type { MotorState } from '$lib/types/models';
+	import type { SafeState } from '$lib/types/models';
 
-	export let data: LayoutData;
+	interface Props {
+		data: LayoutData;
+		children?: import('svelte').Snippet;
+	}
 
-	//$: console.log($analytics);
+	let { data, children }: Props = $props();
 
-	onMount(() => {
+	onMount(async () => {
 		if ($user.bearer_token !== '') {
-			validateUser($user);
+			await validateUser($user);
 		}
-		menuOpen = false;
-		connectToEventSource();
+		if (!(page.data.features.security && $user.bearer_token === '')) {
+			initSocket();
+		}
 	});
 
-	onDestroy(() => {
-		NotificationSource?.close();
-	});
+	const initSocket = () => {
+		const ws_token = page.data.features.security ? '?access_token=' + $user.bearer_token : '';
+		socket.init(
+			`ws://${window.location.host}/ws/events${ws_token}`,
+			page.data.features.event_use_json
+		);
+		addEventListeners();
+		fetchEnvironment();
+	};
 
 	onDestroy(() => {
-		NotificationSource.close();
+		removeEventListeners();
 	});
+
+	const addEventListeners = () => {
+		socket.on('open', handleOpen);
+		socket.on('close', handleClose);
+		socket.on('error', handleError);
+		socket.on('rssi', handleNetworkStatus);
+		socket.on('notification', handleNotification);
+		if (page.data.features.analytics) socket.on('analytics', handleAnalytics);
+		if (page.data.features.battery) socket.on('battery', handleBattery);
+		if (page.data.features.download_firmware) socket.on('otastatus', handleOAT);
+		socket.on('safestate', handleSafeState);
+		socket.on('motor', handleMotorStatus);
+		socket.on('heartbeat', handleHeartbeatStatus);
+	};
+
+	const removeEventListeners = () => {
+		socket.off('analytics', handleAnalytics);
+		socket.off('open', handleOpen);
+		socket.off('close', handleClose);
+		socket.off('rssi', handleNetworkStatus);
+		socket.off('notification', handleNotification);
+		socket.off('battery', handleBattery);
+		socket.off('otastatus', handleOAT);
+		socket.off('safestate', handleSafeState);
+		socket.off('motor', handleMotorStatus);
+		socket.off('heartbeat', handleHeartbeatStatus);
+	};
 
 	async function validateUser(userdata: userProfile) {
 		try {
@@ -50,136 +97,89 @@
 		} catch (error) {
 			console.error('Error:', error);
 		}
+	}
+
+	const handleOpen = () => {
+		notifications.success('Connection to device established', 5000);
+	};
+
+	const handleClose = () => {
+		notifications.error('Connection to device lost', 5000);
+		telemetry.setRSSI({ rssi: 0, ssid: '' });
+	};
+
+	const handleError = (data: any) => console.error(data);
+
+	const handleNotification = (data: any) => {
+		switch (data.type) {
+			case 'info':
+				notifications.info(data.message, 5000);
+				break;
+			case 'warning':
+				notifications.warning(data.message, 5000);
+				break;
+			case 'error':
+				notifications.error(data.message, 5000);
+				break;
+			case 'success':
+				notifications.success(data.message, 5000);
+				break;
+			default:
+				break;
+		}
+	};
+
+	const handleAnalytics = (data: Analytics) => analytics.addData(data);
+
+	const handleNetworkStatus = (data: RSSI) => telemetry.setRSSI(data);
+
+	const handleBattery = (data: Battery) => {
+		telemetry.setBattery(data);
+		batteryHistory.addData(data);
+	};
+
+	const handleOAT = (data: DownloadOTA) => telemetry.setDownloadOTA(data);
+
+	const handleSafeState = (data: SafeState) => safeStateHeartbeat.updateSafeState(data);
+
+	const handleHeartbeatStatus = (data: HeartbeatMode) => {
+		if (data.heartbeat === 0) {
+			safeStateHeartbeat.stopHeartbeat();
+		} else {
+			safeStateHeartbeat.startHeartbeat();
+		}
+	};
+
+	const handleMotorStatus = (data: MotorState) => telemetry.setMotorStatus(data);
+
+	async function fetchEnvironment() {
+		try {
+			const response = await fetch('/rest/environment', {
+				method: 'GET',
+				headers: {
+					Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
+					'Content-Type': 'application/json'
+				}
+			});
+			if (response.status === 200) {
+				const data = await response.json();
+				environment.set(data);
+			}
+		} catch (error) {
+			console.error('Error:', error);
+		}
 		return;
 	}
 
-	let menuOpen = false;
-
-	let NotificationSource: EventSource;
-	let reconnectIntervalId: number = 0;
-	let connectionLost = false;
-	let unresponsiveTimeout: number;
-
-	function connectToEventSource() {
-		NotificationSource = new EventSource('/events');
-		console.log('Attempting SSE connection.');
-
-		NotificationSource.addEventListener('open', () => {
-			clearInterval(reconnectIntervalId);
-			reconnectIntervalId = 0;
-			connectionLost = false;
-			console.log('SSE connection established');
-			notifications.success('Connection to device established', 5000);
-			telemetry.setRSSI('found'); // Update store and flag as server being available again
-		});
-
-		NotificationSource.addEventListener(
-			'rssi',
-			(event) => {
-				telemetry.setRSSI(event.data);
-				// Reset a timer to detect unresponsiveness
-				clearTimeout(unresponsiveTimeout);
-
-				unresponsiveTimeout = setTimeout(() => {
-					console.log('Server is unresponsive');
-					reconnectEventSource();
-				}, 2000); // Detect unresponsiveness after 2 seconds
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'error',
-			(event) => {
-				reconnectEventSource();
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'close',
-			(event) => {
-				reconnectEventSource();
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'infoToast',
-			(event) => {
-				notifications.info(event.data, 5000);
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'successToast',
-			(event) => {
-				notifications.success(event.data, 5000);
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'warningToast',
-			(event) => {
-				notifications.warning(event.data, 5000);
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'errorToast',
-			(event) => {
-				notifications.error(event.data, 5000);
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'battery',
-			(event) => {
-				telemetry.setBattery(event.data);
-			},
-			false
-		);
-
-		NotificationSource.addEventListener(
-			'download_ota',
-			(event) => {
-				telemetry.setDownloadOTA(event.data);
-			},
-			false
-		);
-		NotificationSource.addEventListener(
-			'analytics',
-			(event) => {
-				analytics.addData(event.data);
-			},
-			false
-		);
-	}
-
-	function reconnectEventSource() {
-		if (connectionLost === false) {
-			NotificationSource.close;
-			notifications.error('Connection to device lost', 5000);
-			if (reconnectIntervalId === 0) {
-				reconnectIntervalId = setInterval(connectToEventSource, 2000);
-				console.log('SSE reconnect Timer ID: ' + reconnectIntervalId);
-			}
-		}
-		connectionLost = true;
-	}
-
+	let menuOpen = $state(false);
 </script>
 
 <svelte:head>
-	<title>{$page.data.title}</title>
+	<title>{page.data.title}</title>
 </svelte:head>
 
-{#if $page.data.features.security && $user.bearer_token === ''}
-	<Login />
+{#if page.data.features.security && $user.bearer_token === ''}
+	<Login on:signIn={initSocket} />
 {:else}
 	<div class="drawer lg:drawer-open">
 		<input id="main-menu" type="checkbox" class="drawer-toggle" bind:checked={menuOpen} />
@@ -188,13 +188,13 @@
 			<Statusbar />
 
 			<!-- Main page content here -->
-			<slot />
+			{@render children?.()}
 		</div>
 		<!-- Side Navigation -->
 		<div class="drawer-side z-30 shadow-lg">
-			<label for="main-menu" class="drawer-overlay" />
+			<label for="main-menu" class="drawer-overlay"></label>
 			<Menu
-				on:menuClicked={() => {
+				closeMenu={() => {
 					menuOpen = false;
 				}}
 			/>
@@ -203,13 +203,14 @@
 {/if}
 
 <Modals>
-	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<div
-		slot="backdrop"
-		class="fixed inset-0 z-40 max-h-full max-w-full bg-black/20 backdrop-blur"
-		transition:fade
-		on:click={closeModal}
-	/>
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	{#snippet backdrop({ close })}
+		<div
+			class="fixed inset-0 z-40 max-h-full max-w-full bg-black/20 backdrop-blur-sm"
+			transition:fade|global
+			onclick={() => close()}
+		></div>
+	{/snippet}
 </Modals>
 
 <Toast />

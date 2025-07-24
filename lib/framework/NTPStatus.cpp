@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -14,12 +14,19 @@
 
 #include <NTPStatus.h>
 
-NTPStatus::NTPStatus(AsyncWebServer *server, SecurityManager *securityManager)
+NTPStatus::NTPStatus(PsychicHttpServer *server, SecurityManager *securityManager) : _server(server),
+                                                                                    _securityManager(securityManager)
 {
-    server->on(NTP_STATUS_SERVICE_PATH,
-               HTTP_GET,
-               securityManager->wrapRequest(std::bind(&NTPStatus::ntpStatus, this, std::placeholders::_1),
-                                            AuthenticationPredicates::IS_AUTHENTICATED));
+}
+
+void NTPStatus::begin()
+{
+    _server->on(NTP_STATUS_SERVICE_PATH,
+                HTTP_GET,
+                _securityManager->wrapRequest(std::bind(&NTPStatus::ntpStatus, this, std::placeholders::_1),
+                                              AuthenticationPredicates::IS_AUTHENTICATED));
+
+    ESP_LOGV(SVK_TAG, "Registered GET endpoint: %s", NTP_STATUS_SERVICE_PATH);
 }
 
 /*
@@ -44,10 +51,10 @@ String toLocalTimeString(tm *time)
     return formatTime(time, "%FT%T");
 }
 
-void NTPStatus::ntpStatus(AsyncWebServerRequest *request)
+esp_err_t NTPStatus::ntpStatus(PsychicRequest *request)
 {
-    AsyncJsonResponse *response = new AsyncJsonResponse(false, MAX_NTP_STATUS_SIZE);
-    JsonObject root = response->getRoot();
+    PsychicJsonResponse response = PsychicJsonResponse(request, false);
+    JsonObject root = response.getRoot();
 
     // grab the current instant in unix seconds
     time_t now = time(nullptr);
@@ -67,6 +74,5 @@ void NTPStatus::ntpStatus(AsyncWebServerRequest *request)
     // device uptime in seconds
     root["uptime"] = millis() / 1000;
 
-    response->setLength();
-    request->send(response);
+    return response.send();
 }

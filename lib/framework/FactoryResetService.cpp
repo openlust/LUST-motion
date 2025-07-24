@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -16,18 +16,29 @@
 
 using namespace std::placeholders;
 
-FactoryResetService::FactoryResetService(AsyncWebServer *server, FS *fs, SecurityManager *securityManager) : fs(fs)
+FactoryResetService::FactoryResetService(PsychicHttpServer *server,
+                                         FS *fs,
+                                         SecurityManager *securityManager) : _server(server),
+                                                                             fs(fs),
+                                                                             _securityManager(securityManager)
 {
-    server->on(FACTORY_RESET_SERVICE_PATH,
-               HTTP_POST,
-               securityManager->wrapRequest(std::bind(&FactoryResetService::handleRequest, this, _1),
-                                            AuthenticationPredicates::IS_ADMIN));
 }
 
-void FactoryResetService::handleRequest(AsyncWebServerRequest *request)
+void FactoryResetService::begin()
 {
-    request->onDisconnect(std::bind(&FactoryResetService::factoryReset, this));
-    request->send(200);
+    _server->on(FACTORY_RESET_SERVICE_PATH,
+                HTTP_POST,
+                _securityManager->wrapRequest(std::bind(&FactoryResetService::handleRequest, this, _1), AuthenticationPredicates::IS_ADMIN));
+
+    ESP_LOGV(SVK_TAG, "Registered POST endpoint: %s", FACTORY_RESET_SERVICE_PATH);
+}
+
+esp_err_t FactoryResetService::handleRequest(PsychicRequest *request)
+{
+    request->reply(200);
+    factoryReset();
+
+    return ESP_OK;
 }
 
 /**

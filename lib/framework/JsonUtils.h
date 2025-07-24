@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -22,7 +22,7 @@
 class JsonUtils
 {
 public:
-    static void readIP(JsonObject &root, const String &key, IPAddress &ip, const String &def)
+    static void readIPStr(JsonObject &root, const String &key, IPAddress &ip, const String &def)
     {
         IPAddress defaultIp = {};
         if (!defaultIp.fromString(def))
@@ -31,6 +31,7 @@ public:
         }
         readIP(root, key, ip, defaultIp);
     }
+
     static void readIP(JsonObject &root, const String &key, IPAddress &ip, const IPAddress &defaultIp = INADDR_NONE)
     {
         if (!root[key].is<String>() || !ip.fromString(root[key].as<String>()))
@@ -38,6 +39,7 @@ public:
             ip = defaultIp;
         }
     }
+
     static void writeIP(JsonObject &root, const String &key, const IPAddress &ip)
     {
         if (IPUtils::isSet(ip))

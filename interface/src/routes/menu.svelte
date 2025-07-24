@@ -7,6 +7,8 @@
 	import Health from '~icons/tabler/stethoscope';
 	import Update from '~icons/tabler/refresh-alert';
 	import WiFi from '~icons/tabler/wifi';
+	import Router from '~icons/tabler/router';
+	import AP from '~icons/tabler/access-point';
 	import Remote from '~icons/tabler/network';
 	import Control from '~icons/tabler/adjustments';
 	import Safety from '~icons/tabler/lock-square-rounded';
@@ -17,22 +19,19 @@
 	import MQTT from '~icons/tabler/topology-star-3';
 	import NTP from '~icons/tabler/clock-check';
 	import Metrics from '~icons/tabler/report-analytics';
-	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
+	import Bug from '~icons/tabler/bug';
+	import { page } from '$app/state';
 	import { user } from '$lib/stores/user';
-	import { createEventDispatcher } from 'svelte';
 
-	const appName = 'LUST-motion';
+	let { closeMenu } = $props();
 
-	const copyright = '2023 LUST collective';
-
-	const github = { href: 'https://github.com/' + $page.data.github, active: true };
+	const github = { href: 'https://github.com/' + page.data.github, active: true };
 
 	const discord = { href: 'https://discord.gg/MmpT9xE', active: true };
 
 	type menuItem = {
 		title: string;
-		icon: object;
+		icon: ConstructorOfATypedSvelteComponent;
 		href?: string;
 		feature: boolean;
 		active?: boolean;
@@ -41,49 +40,62 @@
 
 	type subMenuItem = {
 		title: string;
-		icon: object;
+		icon: ConstructorOfATypedSvelteComponent;
 		href: string;
 		feature: boolean;
 		active: boolean;
 	};
 
-	let menuItems = [
+	let menuItems = $state([
 		{
 			title: 'Safety',
 			icon: Safety,
 			href: '/safety',
-			feature: true,
-			active: false
+			feature: true
 		},
 		{
 			title: 'Connections',
 			icon: Remote,
-			feature: $page.data.features.mqtt || $page.data.features.ntp,
-			active: true,
+			feature: page.data.features.mqtt || page.data.features.ntp,
 			submenu: [
 				{
 					title: 'MQTT',
 					icon: MQTT,
 					href: '/connections/mqtt',
-					feature: $page.data.features.mqtt,
-					active: false
+					feature: page.data.features.mqtt
 				},
 				{
 					title: 'NTP',
 					icon: NTP,
 					href: '/connections/ntp',
-					feature: $page.data.features.ntp,
-					active: false
+					feature: page.data.features.ntp
 				}
 			]
 		},
-		{ title: 'Wi-Fi', icon: WiFi, href: '/wifi', feature: true, active: false },
+		{
+			title: 'WiFi',
+			icon: WiFi,
+			feature: true,
+			submenu: [
+				{
+					title: 'WiFi Station',
+					icon: Router,
+					href: '/wifi/sta',
+					feature: true
+				},
+				{
+					title: 'Access Point',
+					icon: AP,
+					href: '/wifi/ap',
+					feature: true
+				}
+			]
+		},
 		{
 			title: 'Users',
 			icon: Users,
 			href: '/user',
-			feature: $page.data.features.security && $user.admin,
-			active: false
+			feature: page.data.features.security && $user.admin
 		},
 		{
 			title: 'System',
@@ -94,68 +106,53 @@
 					title: 'Configuration',
 					icon: Config,
 					href: '/system/config',
-					feature: true,
+					feature: !page.data.features.security || $user.admin,
 					active: false
 				},
 				{
 					title: 'System Status',
 					icon: Health,
 					href: '/system/status',
-					feature: true,
-					active: false
+					feature: true
 				},
 				{
 					title: 'System Metrics',
 					icon: Metrics,
 					href: '/system/metrics',
-					feature: $page.data.features.analytics,
-					active: false
+					feature: page.data.features.analytics
+				},
+				{
+					title: 'Core Dump',
+					icon: Bug,
+					href: '/system/coredump',
+					feature: page.data.features.coredump
 				},
 				{
 					title: 'Firmware Update',
 					icon: Update,
 					href: '/system/update',
 					feature:
-						($page.data.features.ota ||
-							$page.data.features.upload_firmware ||
-							$page.data.features.download_firmware) &&
-						(!$page.data.features.security || $user.admin),
-					active: false
+						(page.data.features.ota ||
+							page.data.features.upload_firmware ||
+							page.data.features.download_firmware) &&
+						(!page.data.features.security || $user.admin)
 				}
 			]
 		}
-	];
+	] as menuItem[]);
 
-	const dispatch = createEventDispatcher();
-
-	function setActiveMenuItem(menuItems: menuItem[], targetTitle: string) {
-		for (let i = 0; i < menuItems.length; i++) {
-			const menuItem = menuItems[i];
-
-			// Clear any previous set active flags
-			menuItem.active = false;
-
-			// Check if the current menu item's title matches the target title
-			if (menuItem.title === targetTitle) {
-				menuItem.active = true; // Set the active property to true
-				dispatch('menuClicked');
-			}
-
-			// Check if the current menu item has a submenu
-			if (menuItem.submenu && menuItem.submenu.length > 0) {
-				// Recursively call the function for each submenu item
-				setActiveMenuItem(menuItem.submenu, targetTitle);
-			}
-		}
-		if (targetTitle == '') {
-			dispatch('menuClicked');
-		}
-		menuItems = menuItems;
+	function setActiveMenuItem(targetTitle: string) {
+		menuItems.forEach((item) => {
+			item.active = item.title === targetTitle;
+			item.submenu?.forEach((subItem) => {
+				subItem.active = subItem.title === targetTitle;
+			});
+		});
+		closeMenu();
 	}
 
-	onMount(() => {
-		setActiveMenuItem(menuItems, $page.data.title);
-		menuItems = menuItems;
+	$effect(() => {
+		setActiveMenuItem(page.data.title);
 	});
 </script>
 
@@ -164,69 +161,65 @@
 	<a
 		href="/"
 		class="rounded-box mb-4 flex items-center hover:scale-[1.02] active:scale-[0.98]"
-		on:click={() => setActiveMenuItem(menuItems, '')}
+		onclick={() => setActiveMenuItem('')}
 	>
-		<img src={logo} alt="Logo" class="h-12 w-12" />
-		<h1 class="px-4 text-2xl font-bold">{appName}</h1>
+		<img src={logo} alt="Logo" class="h-12 w-12 -rotate-90" />
+		<h1 class="px-4 text-2xl font-bold">{page.data.appName}</h1>
 	</a>
-	<ul class="menu rounded-box menu-vertical flex-nowrap overflow-y-auto">
+	<ul class="menu w-full rounded-box menu-vertical flex-nowrap overflow-y-auto">
 		{#each menuItems as menuItem, i (menuItem.title)}
 			{#if menuItem.feature}
-				{#if menuItem.submenu}
-					<li>
-						<details>
-							<summary class="text-lg font-bold"
-								><svelte:component this={menuItem.icon} class="h-6 w-6" />{menuItem.title}</summary
-							>
+				<li>
+					{#if menuItem.submenu}
+						<details open={menuItem.submenu.some((subItem) => subItem.active)}>
+							<summary class="text-lg font-bold">
+								<menuItem.icon class="h-6 w-6" />
+								{menuItem.title}
+							</summary>
 							<ul>
 								{#each menuItem.submenu as subMenuItem}
 									{#if subMenuItem.feature}
 										<li class="hover-bordered">
 											<a
 												href={subMenuItem.href}
-												class="text-ml font-bold {subMenuItem.active ? 'bg-base-100' : ''}"
-												on:click={() => {
-													setActiveMenuItem(menuItems, subMenuItem.title);
-													menuItems = menuItems;
-												}}
-												><svelte:component
-													this={subMenuItem.icon}
-													class="h-5 w-5"
-												/>{subMenuItem.title}</a
+												class:bg-base-100={subMenuItem.active}
+												class="text-ml font-bold"
+												onclick={() => {
+													setActiveMenuItem(subMenuItem.title);
+												}}><subMenuItem.icon class="h-5 w-5" />{subMenuItem.title}</a
 											>
 										</li>
 									{/if}
 								{/each}
 							</ul>
 						</details>
-					</li>
-				{:else}
-					<li class="hover-bordered">
+					{:else}
 						<a
 							href={menuItem.href}
-							class="text-lg font-bold {menuItem.active ? 'bg-base-100' : ''}"
-							on:click={() => {
-								setActiveMenuItem(menuItems, menuItem.title);
-								menuItems = menuItems;
-							}}><svelte:component this={menuItem.icon} class="h-6 w-6" />{menuItem.title}</a
+							class:bg-base-100={menuItem.active}
+							class="text-lg font-bold"
+							onclick={() => {
+								setActiveMenuItem(menuItem.title);
+							}}><menuItem.icon class="h-6 w-6" />{menuItem.title}</a
 						>
-					</li>
-				{/if}
+					{/if}
+				</li>
 			{/if}
 		{/each}
 	</ul>
 
-	<div class="flex-col" />
-	<div class="flex-grow" />
+	<div class="flex-col"></div>
+	<div class="grow"></div>
 
-	{#if $page.data.features.security}
+	{#if page.data.features.security}
 		<div class="flex items-center">
 			<Avatar class="h-8 w-8" />
-			<span class="flex-grow px-4 text-xl font-bold">{$user.username}</span>
-			<!-- svelte-ignore a11y-click-events-have-key-events -->
+			<span class="grow px-4 text-xl font-bold">{$user.username}</span>
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
 				class="btn btn-ghost"
-				on:click={() => {
+				onclick={() => {
 					user.invalidate();
 				}}
 			>
@@ -235,7 +228,7 @@
 		</div>
 	{/if}
 
-	<div class="divider my-0" />
+	<div class="divider my-0"></div>
 	<div class="flex items-center">
 		{#if github.active}
 			<a href={github.href} class="btn btn-ghost" target="_blank" rel="noopener noreferrer"
@@ -247,8 +240,8 @@
 				><Discord class="h-5 w-5" /></a
 			>
 		{/if}
-		<div class="inline-flex flex-grow items-center justify-end text-sm">
-			<Copyright class="h-4 w-4" /><span class="px-2">{copyright}</span>
+		<div class="inline-flex grow items-center justify-end text-sm">
+			<Copyright class="h-4 w-4" /><span class="px-2">{page.data.copyright}</span>
 		</div>
 	</div>
 </div>

@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -44,6 +44,8 @@
 #define SECURITY_SETTINGS_FILE "/config/securitySettings.json"
 #define SECURITY_SETTINGS_PATH "/rest/securitySettings"
 
+#define GENERATE_TOKEN_PATH "/rest/generateToken"
+
 #if FT_ENABLED(FT_SECURITY)
 
 class SecuritySettings
@@ -58,10 +60,10 @@ public:
         root["jwt_secret"] = settings.jwtSecret;
 
         // users
-        JsonArray users = root.createNestedArray("users");
+        JsonArray users = root["users"].to<JsonArray>();
         for (User user : settings.users)
         {
-            JsonObject userRoot = users.createNestedObject();
+            JsonObject userRoot = users.add<JsonObject>();
             userRoot["username"] = user.username;
             userRoot["password"] = user.password;
             userRoot["admin"] = user.admin;
@@ -94,22 +96,27 @@ public:
 class SecuritySettingsService : public StatefulService<SecuritySettings>, public SecurityManager
 {
 public:
-    SecuritySettingsService(AsyncWebServer *server, FS *fs);
+    SecuritySettingsService(PsychicHttpServer *server, FS *fs);
 
     void begin();
 
     // Functions to implement SecurityManager
     Authentication authenticate(const String &username, const String &password);
-    Authentication authenticateRequest(AsyncWebServerRequest *request);
+    Authentication authenticateRequest(PsychicRequest *request);
     String generateJWT(User *user);
-    ArRequestFilterFunction filterRequest(AuthenticationPredicate predicate);
-    ArRequestHandlerFunction wrapRequest(ArRequestHandlerFunction onRequest, AuthenticationPredicate predicate);
-    ArJsonRequestHandlerFunction wrapCallback(ArJsonRequestHandlerFunction callback, AuthenticationPredicate predicate);
+
+    PsychicRequestFilterFunction filterRequest(AuthenticationPredicate predicate);
+    PsychicHttpRequestCallback wrapRequest(PsychicHttpRequestCallback onRequest, AuthenticationPredicate predicate);
+    PsychicJsonRequestCallback wrapCallback(PsychicJsonRequestCallback onRequest, AuthenticationPredicate predicate);
 
 private:
+    PsychicHttpServer *_server;
+
     HttpEndpoint<SecuritySettings> _httpEndpoint;
     FSPersistence<SecuritySettings> _fsPersistence;
     ArduinoJsonJWT _jwtHandler;
+
+    esp_err_t generateToken(PsychicRequest *request);
 
     void configureJWTHandler();
 
@@ -129,14 +136,14 @@ private:
 class SecuritySettingsService : public SecurityManager
 {
 public:
-    SecuritySettingsService(AsyncWebServer *server, FS *fs);
+    SecuritySettingsService(PsychicHttpServer *server, FS *fs);
     ~SecuritySettingsService();
 
     // minimal set of functions to support framework with security settings disabled
-    Authentication authenticateRequest(AsyncWebServerRequest *request);
-    ArRequestFilterFunction filterRequest(AuthenticationPredicate predicate);
-    ArRequestHandlerFunction wrapRequest(ArRequestHandlerFunction onRequest, AuthenticationPredicate predicate);
-    ArJsonRequestHandlerFunction wrapCallback(ArJsonRequestHandlerFunction onRequest, AuthenticationPredicate predicate);
+    Authentication authenticateRequest(PsychicRequest *request);
+    PsychicRequestFilterFunction filterRequest(AuthenticationPredicate predicate);
+    PsychicHttpRequestCallback wrapRequest(PsychicHttpRequestCallback onRequest, AuthenticationPredicate predicate);
+    PsychicJsonRequestCallback wrapCallback(PsychicJsonRequestCallback onRequest, AuthenticationPredicate predicate);
 };
 
 #endif // end FT_ENABLED(FT_SECURITY)

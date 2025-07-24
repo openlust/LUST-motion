@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -22,10 +22,6 @@
 #include <functional>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
-
-#ifndef DEFAULT_BUFFER_SIZE
-#define DEFAULT_BUFFER_SIZE 1024
-#endif
 
 enum class StateUpdateResult
 {
@@ -41,7 +37,9 @@ template <typename T>
 using JsonStateReader = std::function<void(T &settings, JsonObject &root)>;
 
 typedef size_t update_handler_id_t;
+typedef size_t hook_handler_id_t;
 typedef std::function<void(const String &originId)> StateUpdateCallback;
+typedef std::function<void(const String &originId, StateUpdateResult &result)> StateHookCallback;
 
 typedef struct StateUpdateHandlerInfo
 {
@@ -49,8 +47,17 @@ typedef struct StateUpdateHandlerInfo
     update_handler_id_t _id;
     StateUpdateCallback _cb;
     bool _allowRemove;
-    StateUpdateHandlerInfo(StateUpdateCallback cb, bool allowRemove) : _id(++currentUpdatedHandlerId), _cb(cb), _allowRemove(allowRemove){};
+    StateUpdateHandlerInfo(StateUpdateCallback cb, bool allowRemove) : _id(++currentUpdatedHandlerId), _cb(cb), _allowRemove(allowRemove) {};
 } StateUpdateHandlerInfo_t;
+
+typedef struct StateHookHandlerInfo
+{
+    static hook_handler_id_t currentHookHandlerId;
+    hook_handler_id_t _id;
+    StateHookCallback _cb;
+    bool _allowRemove;
+    StateHookHandlerInfo(StateHookCallback cb, bool allowRemove) : _id(++currentHookHandlerId), _cb(cb), _allowRemove(allowRemove) {};
+} StateHookHandlerInfo_t;
 
 template <class T>
 class StatefulService
@@ -87,11 +94,38 @@ public:
         }
     }
 
+    hook_handler_id_t addHookHandler(StateHookCallback cb, bool allowRemove = true)
+    {
+        if (!cb)
+        {
+            return 0;
+        }
+        StateHookHandlerInfo_t hookHandler(cb, allowRemove);
+        _hookHandlers.push_back(hookHandler);
+        return hookHandler._id;
+    }
+
+    void removeHookHandler(hook_handler_id_t id)
+    {
+        for (auto i = _hookHandlers.begin(); i != _hookHandlers.end();)
+        {
+            if ((*i)._allowRemove && (*i)._id == id)
+            {
+                i = _hookHandlers.erase(i);
+            }
+            else
+            {
+                ++i;
+            }
+        }
+    }
+
     StateUpdateResult update(std::function<StateUpdateResult(T &)> stateUpdater, const String &originId)
     {
         beginTransaction();
         StateUpdateResult result = stateUpdater(_state);
         endTransaction();
+        callHookHandlers(originId, result);
         if (result == StateUpdateResult::CHANGED)
         {
             callUpdateHandlers(originId);
@@ -112,6 +146,7 @@ public:
         beginTransaction();
         StateUpdateResult result = stateUpdater(jsonObject, _state);
         endTransaction();
+        callHookHandlers(originId, result);
         if (result == StateUpdateResult::CHANGED)
         {
             callUpdateHandlers(originId);
@@ -149,6 +184,14 @@ public:
         }
     }
 
+    void callHookHandlers(const String &originId, StateUpdateResult &result)
+    {
+        for (const StateHookHandlerInfo_t &hookHandler : _hookHandlers)
+        {
+            hookHandler._cb(originId, result);
+        }
+    }
+
 protected:
     T _state;
 
@@ -165,6 +208,7 @@ protected:
 private:
     SemaphoreHandle_t _accessMutex;
     std::list<StateUpdateHandlerInfo_t> _updateHandlers;
+    std::list<StateHookHandlerInfo_t> _hookHandlers;
 };
 
 #endif // end StatefulService_h

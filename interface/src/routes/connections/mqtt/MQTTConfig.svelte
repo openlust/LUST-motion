@@ -3,28 +3,23 @@
 	import { cubicOut } from 'svelte/easing';
 	import SettingsCard from '$lib/components/SettingsCard.svelte';
 	import { user } from '$lib/stores/user';
-	import { page } from '$app/stores';
+	import { page } from '$app/state';
 	import { notifications } from '$lib/components/toasts/notifications';
 	import Spinner from '$lib/components/Spinner.svelte';
 	import MQTT from '~icons/tabler/topology-star-3';
 	import Info from '~icons/tabler/info-circle';
+	import type { BrokerSettings } from '$lib/types/models';
 
-	type BrokerSettings = {
-		mqtt_path: string;
-		name: string;
-		unique_id: string;
-	};
+	let brokerSettings: BrokerSettings = $state();
 
-	let brokerSettings: BrokerSettings;
-
-	let formField: any;
+	let formField: any = $state();
 
 	async function getBrokerSettings() {
 		try {
 			const response = await fetch('/rest/brokerSettings', {
 				method: 'GET',
 				headers: {
-					Authorization: $page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
+					Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
 					'Content-Type': 'application/json'
 				}
 			});
@@ -36,9 +31,12 @@
 	}
 
 	let formErrors = {
-		uid: false,
-		path: false,
-		name: false
+		status: false,
+		control_pub: false,
+		control_sub: false,
+		environment: false,
+		safestate_pub: false,
+		safestate_sub: false
 	};
 
 	async function postBrokerSettings() {
@@ -46,7 +44,7 @@
 			const response = await fetch('/rest/brokerSettings', {
 				method: 'POST',
 				headers: {
-					Authorization: $page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
+					Authorization: page.data.features.security ? 'Bearer ' + $user.bearer_token : 'Basic',
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify(brokerSettings)
@@ -65,124 +63,233 @@
 
 	function handleSubmitBroker() {
 		let valid = true;
-
-		// Validate unique ID
-		if (brokerSettings.unique_id.length < 3 || brokerSettings.unique_id.length > 32) {
+		// Validate control topic
+		if (
+			brokerSettings.control_topic_pub.length > 64 ||
+			brokerSettings.control_topic_pub.includes('#') ||
+			brokerSettings.control_topic_pub.includes('+')
+		) {
 			valid = false;
-			formErrors.uid = true;
+			formErrors.control_pub = true;
 		} else {
-			formErrors.uid = false;
+			formErrors.control_pub = false;
 		}
 
-		// Validate name
-		if (brokerSettings.name.length < 3 || brokerSettings.name.length > 32) {
+		// Validate control topic
+		if (brokerSettings.control_topic_sub.length > 64) {
 			valid = false;
-			formErrors.name = true;
+			formErrors.control_sub = true;
 		} else {
-			formErrors.name = false;
+			formErrors.control_sub = false;
 		}
-		// Validate MQTT Path
-		if (brokerSettings.mqtt_path.length > 64) {
+
+		// Validate environment topic
+		if (
+			brokerSettings.environment_topic_pub.length > 64 ||
+			brokerSettings.environment_topic_pub.includes('#') ||
+			brokerSettings.environment_topic_pub.includes('+')
+		) {
 			valid = false;
-			formErrors.path = true;
+			formErrors.environment = true;
 		} else {
-			formErrors.path = false;
+			formErrors.environment = false;
+		}
+
+		// Validate safestate topic
+		if (
+			brokerSettings.safestate_topic_pub.length > 64 ||
+			brokerSettings.safestate_topic_pub.includes('#') ||
+			brokerSettings.safestate_topic_pub.includes('+')
+		) {
+			valid = false;
+			formErrors.safestate_pub = true;
+		} else {
+			formErrors.safestate_pub = false;
+		}
+
+		// Validate safestate topic
+		if (brokerSettings.safestate_topic_sub.length > 64) {
+			valid = false;
+			formErrors.safestate_sub = true;
+		} else {
+			formErrors.safestate_sub = false;
+		}
+
+		// Validate MQTT Status Topic
+		if (
+			brokerSettings.status_topic.length > 64 ||
+			brokerSettings.status_topic.includes('#') ||
+			brokerSettings.status_topic.includes('+')
+		) {
+			valid = false;
+			formErrors.status = true;
+		} else {
+			formErrors.status = false;
 		}
 
 		// Submit JSON to REST API
 		if (valid) {
 			postBrokerSettings();
-			//alert('Form Valid');
 		}
+	}
+
+	function preventDefault(fn) {
+		return function (event) {
+			event.preventDefault();
+			fn.call(this, event);
+		};
 	}
 </script>
 
 <SettingsCard collapsible={true} open={false}>
-	<MQTT slot="icon" class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
-	<span slot="title">MQTT Broker Settings</span>
-	<div class="w-full overflow-x-auto">
+	{#snippet icon()}
+		<MQTT class="lex-shrink-0 mr-2 h-6 w-6 self-end" />
+	{/snippet}
+	{#snippet title()}
+		<span>MQTT Broker Settings</span>
+	{/snippet}
+	<div class="w-full">
 		{#await getBrokerSettings()}
 			<Spinner />
 		{:then nothing}
 			<form
-				on:submit|preventDefault={handleSubmitBroker}
+				class="fieldset"
+				onsubmit={preventDefault(handleSubmitBroker)}
 				novalidate
 				bind:this={formField}
 				transition:slide|local={{ duration: 300, easing: cubicOut }}
 			>
 				<div class="alert alert-info my-2 shadow-lg">
-					<Info class="h-6 w-6 flex-shrink-0 stroke-current" />
+					<Info class="h-6 w-6 shrink-0 stroke-current" />
 					<span
-						>The LED is controllable via MQTT with the demo project designed to work with Home
-						Assistant's auto discovery feature.</span
-					>
+						>Please provide MQTT topics for the different control messages. Wildcards are only
+						supported for subscription (set) topics. The use of wildcards for publishing (status)
+						topics is not supported.
+					</span>
 				</div>
-				<div class="grid w-full grid-cols-1 content-center gap-x-4 px-4">
+				<div class="grid w-full grid-cols-1 content-center gap-x-4 gap-y-2 px-4">
 					<div>
-						<label class="label" for="uid">
-							<span class="label-text text-md">Unique ID</span>
-						</label>
+						<label class="label" for="status_topic">MQTT Status Topic</label>
 						<input
 							type="text"
-							class="input input-bordered invalid:border-error w-full invalid:border-2 {formErrors.uid
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.status
 								? 'border-error border-2'
 								: ''}"
-							bind:value={brokerSettings.unique_id}
-							id="uid"
-							min="3"
-							max="32"
-							required
-						/>
-						<label class="label" for="uid">
-							<span class="label-text-alt text-error {formErrors.uid ? '' : 'hidden'}"
-								>Unique ID must be between 3 and 32 characters long</span
-							>
-						</label>
-					</div>
-					<div>
-						<label class="label" for="name">
-							<span class="label-text text-md">Name</span>
-						</label>
-						<input
-							type="text"
-							class="input input-bordered invalid:border-error w-full invalid:border-2 {formErrors.name
-								? 'border-error border-2'
-								: ''}"
-							bind:value={brokerSettings.name}
-							id="name"
-							min="3"
-							max="32"
-							required
-						/>
-						<label class="label" for="name">
-							<span class="label-text-alt text-error {formErrors.name ? '' : 'hidden'}"
-								>Name must be between 3 and 32 characters long</span
-							>
-						</label>
-					</div>
-					<div>
-						<label class="label" for="path">
-							<span class="label-text text-md">MQTT Path</span>
-						</label>
-						<input
-							type="text"
-							class="input input-bordered invalid:border-error w-full invalid:border-2 {formErrors.path
-								? 'border-error border-2'
-								: ''}"
-							bind:value={brokerSettings.mqtt_path}
-							id="path"
+							bind:value={brokerSettings.status_topic}
+							id="status_topic"
 							min="0"
 							max="64"
 							required
 						/>
-						<label class="label" for="path">
-							<span class="label-text-alt text-error {formErrors.path ? '' : 'hidden'}"
-								>MQTT path is limited to 64 characters</span
+						<label class="label" for="status_topic">
+							<span class="text-error {formErrors.status ? '' : 'hidden'}"
+								>MQTT status topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="control">
+							<span class="label-text text-md">Control Status Topic</span>
+						</label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.control_pub
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.control_topic_pub}
+							id="control"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="control">
+							<span class="label-text-alt text-error {formErrors.control_pub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="control">
+							<span class="label-text text-md">Control Set Topic</span>
+						</label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.control_sub
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.control_topic_sub}
+							id="control"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="control">
+							<span class="label-text-alt text-error {formErrors.control_sub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="environment">
+							<span class="label-text text-md">Environment Status Topic</span>
+						</label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.environment
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.environment_topic_pub}
+							id="environment"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="environment">
+							<span class="label-text-alt text-error {formErrors.environment ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="safestate">Safe State Status Topic </label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.safestate_pub
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.safestate_topic_pub}
+							id="safestate"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="safestate">
+							<span class=" text-error {formErrors.safestate_pub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="safestate_sub">Safe State Set Topic (Heartbeat) </label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.safestate_sub
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.safestate_topic_sub}
+							id="safestate_sub"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="safestate_sub">
+							<span class=" text-error {formErrors.safestate_sub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
 							>
 						</label>
 					</div>
 				</div>
-				<div class="divider mb-2 mt-0" />
+				<div class="divider mb-2 mt-0"></div>
 				<div class="mx-4 flex flex-wrap justify-end gap-2">
 					<button class="btn btn-primary" type="submit">Apply Settings</button>
 				</div>

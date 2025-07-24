@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -14,24 +14,37 @@
 
 #include <APStatus.h>
 
-APStatus::APStatus(AsyncWebServer *server, SecurityManager *securityManager, APSettingsService *apSettingsService) : _apSettingsService(apSettingsService)
+APStatus::APStatus(PsychicHttpServer *server,
+                   SecurityManager *securityManager,
+                   APSettingsService *apSettingsService) : _server(server),
+                                                           _securityManager(securityManager),
+                                                           _apSettingsService(apSettingsService)
 {
-    server->on(AP_STATUS_SERVICE_PATH,
-               HTTP_GET,
-               securityManager->wrapRequest(std::bind(&APStatus::apStatus, this, std::placeholders::_1),
-                                            AuthenticationPredicates::IS_AUTHENTICATED));
+}
+void APStatus::begin()
+{
+    _server->on(AP_STATUS_SERVICE_PATH,
+                HTTP_GET,
+                _securityManager->wrapRequest(std::bind(&APStatus::apStatus, this, std::placeholders::_1),
+                                              AuthenticationPredicates::IS_AUTHENTICATED));
+
+    ESP_LOGV(SVK_TAG, "Registered GET endpoint: %s", AP_STATUS_SERVICE_PATH);
 }
 
-void APStatus::apStatus(AsyncWebServerRequest *request)
+esp_err_t APStatus::apStatus(PsychicRequest *request)
 {
-    AsyncJsonResponse *response = new AsyncJsonResponse(false, MAX_AP_STATUS_SIZE);
-    JsonObject root = response->getRoot();
+    PsychicJsonResponse response = PsychicJsonResponse(request, false);
+    JsonObject root = response.getRoot();
 
     root["status"] = _apSettingsService->getAPNetworkStatus();
     root["ip_address"] = WiFi.softAPIP().toString();
     root["mac_address"] = WiFi.softAPmacAddress();
     root["station_num"] = WiFi.softAPgetStationNum();
 
-    response->setLength();
-    request->send(response);
+    return response.send();
+}
+
+bool APStatus::isActive()
+{
+    return _apSettingsService->getAPNetworkStatus() == APNetworkStatus::ACTIVE ? true : false;
 }

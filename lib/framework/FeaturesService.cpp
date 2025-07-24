@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -14,15 +14,67 @@
 
 #include <FeaturesService.h>
 
-FeaturesService::FeaturesService(AsyncWebServer *server)
+FeaturesService::FeaturesService(PsychicHttpServer *server, EventSocket *eventsocket) : _server(server), _socket(eventsocket)
 {
-    server->on(FEATURES_SERVICE_PATH, HTTP_GET, std::bind(&FeaturesService::features, this, std::placeholders::_1));
 }
 
-void FeaturesService::features(AsyncWebServerRequest *request)
+void FeaturesService::begin()
 {
-    AsyncJsonResponse *response = new AsyncJsonResponse(false, MAX_FEATURES_SIZE);
-    JsonObject root = response->getRoot();
+    _server->on(FEATURES_SERVICE_PATH, HTTP_GET, [&](PsychicRequest *request)
+                {
+                    PsychicJsonResponse response = PsychicJsonResponse(request, false);
+                    JsonObject root = response.getRoot();
+                    createJSON(root);
+                    return response.send(); });
+
+    ESP_LOGV(SVK_TAG, "Registered GET endpoint: %s", FEATURES_SERVICE_PATH);
+
+    _socket->registerEvent(FEATURES_SERVICE_EVENT);
+
+    _socket->onSubscribe(FEATURES_SERVICE_EVENT, [&](const String &originId)
+                         {
+                             ESP_LOGV(SVK_TAG, "Sending features to %s", originId.c_str());
+                             JsonDocument doc;
+                             JsonObject root = doc.as<JsonObject>();
+                             createJSON(root);
+                             _socket->emitEvent(FEATURES_SERVICE_EVENT, root); });
+}
+
+void FeaturesService::addFeature(String feature, bool enabled)
+{
+    UserFeature newFeature;
+    newFeature.feature = feature;
+    newFeature.enabled = enabled;
+
+    bool featureExists = false;
+
+    // Check if the feature already exists
+    for (auto &existingFeature : userFeatures)
+    {
+        if (existingFeature.feature == feature)
+        {
+            // Update the existing feature
+            existingFeature.enabled = enabled;
+            featureExists = true;
+            break;
+        }
+    }
+
+    if (!featureExists)
+    {
+        // If the feature does not exist, add it
+        userFeatures.push_back(newFeature);
+    }
+
+    JsonDocument doc;
+    JsonObject root = doc.as<JsonObject>();
+    createJSON(root);
+    _socket->emitEvent(FEATURES_SERVICE_EVENT, root);
+}
+
+void FeaturesService::createJSON(JsonObject &root)
+{
+
 #if FT_ENABLED(FT_SECURITY)
     root["security"] = true;
 #else
@@ -37,11 +89,6 @@ void FeaturesService::features(AsyncWebServerRequest *request)
     root["ntp"] = true;
 #else
     root["ntp"] = false;
-#endif
-#if FT_ENABLED(FT_OTA)
-    root["ota"] = true;
-#else
-    root["ota"] = false;
 #endif
 #if FT_ENABLED(FT_UPLOAD_FIRMWARE)
     root["upload_firmware"] = true;
@@ -68,22 +115,25 @@ void FeaturesService::features(AsyncWebServerRequest *request)
 #else
     root["analytics"] = false;
 #endif
-    root["firmware_version"] = FIRMWARE_VERSION;
+#if FT_ENABLED(FT_COREDUMP)
+    root["coredump"] = true;
+#else
+    root["coredump"] = false;
+#endif
+
+#if FT_ENABLED(EVENT_USE_JSON)
+    root["event_use_json"] = true;
+#else
+    root["event_use_json"] = false;
+#endif
+
+    root["firmware_version"] = APP_VERSION;
+    root["firmware_name"] = APP_NAME;
+    root["firmware_built_target"] = BUILD_TARGET;
 
     // Iterate over user features
     for (auto &element : userFeatures)
     {
         root[element.feature.c_str()] = element.enabled;
     }
-    response->setLength();
-    request->send(response);
-}
-
-void FeaturesService::addFeature(String feature, bool enabled)
-{
-    UserFeature newFeature;
-    newFeature.feature = feature;
-    newFeature.enabled = enabled;
-
-    userFeatures.push_back(newFeature);
 }

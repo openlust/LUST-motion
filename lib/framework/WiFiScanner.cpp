@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -14,54 +14,65 @@
 
 #include <WiFiScanner.h>
 
-WiFiScanner::WiFiScanner(AsyncWebServer *server, SecurityManager *securityManager)
+WiFiScanner::WiFiScanner(PsychicHttpServer *server,
+                         SecurityManager *securityManager) : _server(server),
+                                                             _securityManager(securityManager)
 {
-    server->on(SCAN_NETWORKS_SERVICE_PATH,
-               HTTP_GET,
-               securityManager->wrapRequest(std::bind(&WiFiScanner::scanNetworks, this, std::placeholders::_1),
-                                            AuthenticationPredicates::IS_ADMIN));
-    server->on(LIST_NETWORKS_SERVICE_PATH,
-               HTTP_GET,
-               securityManager->wrapRequest(std::bind(&WiFiScanner::listNetworks, this, std::placeholders::_1),
-                                            AuthenticationPredicates::IS_ADMIN));
-};
+}
 
-void WiFiScanner::scanNetworks(AsyncWebServerRequest *request)
+void WiFiScanner::begin()
+{
+    _server->on(SCAN_NETWORKS_SERVICE_PATH,
+                HTTP_GET,
+                _securityManager->wrapRequest(std::bind(&WiFiScanner::scanNetworks, this, std::placeholders::_1),
+                                              AuthenticationPredicates::IS_ADMIN));
+
+    ESP_LOGV(SVK_TAG, "Registered GET endpoint: %s", SCAN_NETWORKS_SERVICE_PATH);
+
+    _server->on(LIST_NETWORKS_SERVICE_PATH,
+                HTTP_GET,
+                _securityManager->wrapRequest(std::bind(&WiFiScanner::listNetworks, this, std::placeholders::_1),
+                                              AuthenticationPredicates::IS_ADMIN));
+
+    ESP_LOGV(SVK_TAG, "Registered GET endpoint: %s", LIST_NETWORKS_SERVICE_PATH);
+}
+
+esp_err_t WiFiScanner::scanNetworks(PsychicRequest *request)
 {
     if (WiFi.scanComplete() != -1)
     {
         WiFi.scanDelete();
         WiFi.scanNetworks(true);
     }
-    request->send(202);
+    return request->reply(202);
 }
 
-void WiFiScanner::listNetworks(AsyncWebServerRequest *request)
+esp_err_t WiFiScanner::listNetworks(PsychicRequest *request)
 {
     int numNetworks = WiFi.scanComplete();
     if (numNetworks > -1)
     {
-        AsyncJsonResponse *response = new AsyncJsonResponse(false, MAX_WIFI_SCANNER_SIZE);
-        JsonObject root = response->getRoot();
-        JsonArray networks = root.createNestedArray("networks");
+        PsychicJsonResponse response = PsychicJsonResponse(request, false);
+        JsonObject root = response.getRoot();
+        JsonArray networks = root["networks"].to<JsonArray>();
         for (int i = 0; i < numNetworks; i++)
         {
-            JsonObject network = networks.createNestedObject();
+            JsonObject network = networks.add<JsonObject>();
             network["rssi"] = WiFi.RSSI(i);
             network["ssid"] = WiFi.SSID(i);
             network["bssid"] = WiFi.BSSIDstr(i);
             network["channel"] = WiFi.channel(i);
             network["encryption_type"] = (uint8_t)WiFi.encryptionType(i);
         }
-        response->setLength();
-        request->send(response);
+
+        return response.send();
     }
     else if (numNetworks == -1)
     {
-        request->send(202);
+        return request->reply(202);
     }
     else
     {
-        scanNetworks(request);
+        return scanNetworks(request);
     }
 }

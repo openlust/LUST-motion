@@ -9,7 +9,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -17,9 +17,14 @@
 
 #include <HttpEndpoint.h>
 #include <FSPersistence.h>
+#include <WiFi.h>
 
 #include <time.h>
 #include <lwip/apps/sntp.h>
+
+#ifdef CONFIG_LWIP_TCPIP_CORE_LOCKING
+#include "lwip/priv/tcpip_priv.h"
+#endif
 
 #ifndef FACTORY_NTP_ENABLED
 #define FACTORY_NTP_ENABLED true
@@ -40,7 +45,6 @@
 #define NTP_SETTINGS_FILE "/config/ntpSettings.json"
 #define NTP_SETTINGS_SERVICE_PATH "/rest/ntpSettings"
 
-#define MAX_TIME_SIZE 256
 #define TIME_PATH "/rest/time"
 
 class NTPSettings
@@ -72,19 +76,20 @@ public:
 class NTPSettingsService : public StatefulService<NTPSettings>
 {
 public:
-    NTPSettingsService(AsyncWebServer *server, FS *fs, SecurityManager *securityManager);
+    NTPSettingsService(PsychicHttpServer *server, FS *fs, SecurityManager *securityManager);
 
     void begin();
 
 private:
+    PsychicHttpServer *_server;
+    SecurityManager *_securityManager;
     HttpEndpoint<NTPSettings> _httpEndpoint;
     FSPersistence<NTPSettings> _fsPersistence;
-    AsyncCallbackJsonWebHandler _timeHandler;
 
     void onStationModeGotIP(WiFiEvent_t event, WiFiEventInfo_t info);
     void onStationModeDisconnected(WiFiEvent_t event, WiFiEventInfo_t info);
     void configureNTP();
-    void configureTime(AsyncWebServerRequest *request, JsonVariant &json);
+    esp_err_t configureTime(PsychicRequest *request, JsonVariant &json);
 };
 
 #endif // end NTPSettingsService_h

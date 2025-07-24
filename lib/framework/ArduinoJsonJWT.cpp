@@ -6,7 +6,7 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
@@ -29,7 +29,7 @@ String ArduinoJsonJWT::getSecret()
 }
 
 /*
- * ESP32 uses mbedtls, ESP2866 uses bearssl.
+ * ESP32 uses mbedtls,
  *
  * Both come with decent HMAC implmentations supporting sha256, as well as others.
  *

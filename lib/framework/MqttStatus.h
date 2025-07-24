@@ -9,33 +9,36 @@
  *   https://github.com/theelims/ESP32-sveltekit
  *
  *   Copyright (C) 2018 - 2023 rjwats
- *   Copyright (C) 2023 theelims
+ *   Copyright (C) 2023 - 2025 theelims
  *
  *   All Rights Reserved. This software may be modified and distributed under
  *   the terms of the LGPL v3 license. See the LICENSE file for details.
  **/
 
 #include <WiFi.h>
-#include <AsyncTCP.h>
 
 #include <MqttSettingsService.h>
 #include <ArduinoJson.h>
-#include <AsyncJson.h>
-#include <ESPAsyncWebServer.h>
+#include <PsychicHttp.h>
 #include <SecurityManager.h>
 
-#define MAX_MQTT_STATUS_SIZE 1024
 #define MQTT_STATUS_SERVICE_PATH "/rest/mqttStatus"
 
 class MqttStatus
 {
 public:
-    MqttStatus(AsyncWebServer *server, MqttSettingsService *mqttSettingsService, SecurityManager *securityManager);
+    MqttStatus(PsychicHttpServer *server, MqttSettingsService *mqttSettingsService, SecurityManager *securityManager);
+
+    void begin();
+
+    bool isConnected();
 
 private:
+    PsychicHttpServer *_server;
+    SecurityManager *_securityManager;
     MqttSettingsService *_mqttSettingsService;
 
-    void mqttStatus(AsyncWebServerRequest *request);
+    esp_err_t mqttStatus(PsychicRequest *request);
 };
 
 #endif // end MqttStatus_h
