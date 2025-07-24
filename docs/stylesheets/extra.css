@@ -1,0 +1,51 @@
+.red {
+  color: red;
+}
+
+.white {
+  color: white;
+  background-color: gray;
+}
+
+.cyan {
+  color: cyan;
+}
+
+.blue {
+  color: blue;
+}
+
+.green {
+  color: green;
+}
+
+.magenta {
+  color: magenta;
+}
+
+.black {
+  color: black;
+}
+
+.md-content__button {
+  display: none;
+}
+
+.pick-variant select {
+  background: transparent;
+  width: 300px;
+  padding: 1px;
+  font-size: 16pt;
+  border: 1px solid #ddd;
+  height: 51px;
+  border-radius: 15px;
+}
+
+.invisible {
+  visibility: hidden;
+}
+
+.radios li {
+  list-style: none;
+  line-height: 2em;
+}

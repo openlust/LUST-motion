@@ -1,0 +1,13 @@
+{
+    "name": "LUST-motion",
+    "version": "v0.1.0",
+    "funding_url": "",
+    "builds": [
+      {
+        "chipFamily": "ESP32",
+        "parts": [
+          { "path": "LUST-motion_OSSMRefBoard4MB_0-1-0_webflash.bin", "offset": 0 }
+        ]
+      }
+    ]
+  }
