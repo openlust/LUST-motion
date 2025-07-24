@@ -10,7 +10,15 @@
 	import Info from '~icons/tabler/info-circle';
 	import type { BrokerSettings } from '$lib/types/models';
 
-	let brokerSettings: BrokerSettings = $state();
+	let brokerSettings: BrokerSettings = $state({
+		status_topic: '',
+		control_topic_pub: '',
+		control_topic_sub: '',
+		environment_topic_pub: '',
+		safestate_topic_pub: '',
+		safestate_topic_sub: '',
+		identification_topic_pub: ''
+	});
 
 	let formField: any = $state();
 
@@ -36,7 +44,8 @@
 		control_sub: false,
 		environment: false,
 		safestate_pub: false,
-		safestate_sub: false
+		safestate_sub: false,
+		identification: false
 	};
 
 	async function postBrokerSettings() {
@@ -127,6 +136,18 @@
 			formErrors.status = false;
 		}
 
+		// Validate Identification Topic
+		if (
+			brokerSettings.identification_topic_pub.length > 64 ||
+			brokerSettings.identification_topic_pub.includes('#') ||
+			brokerSettings.identification_topic_pub.includes('+')
+		) {
+			valid = false;
+			formErrors.identification = true;
+		} else {
+			formErrors.identification = false;
+		}
+
 		// Submit JSON to REST API
 		if (valid) {
 			postBrokerSettings();
@@ -209,7 +230,7 @@
 						</label>
 					</div>
 					<div>
-						<label class="label" for="control">
+						<label class="label" for="control_sub">
 							<span class="label-text text-md">Control Set Topic</span>
 						</label>
 						<input
@@ -218,12 +239,12 @@
 								? 'border-error border-2'
 								: ''}"
 							bind:value={brokerSettings.control_topic_sub}
-							id="control"
+							id="control_sub"
 							min="0"
 							max="64"
 							required
 						/>
-						<label class="label" for="control">
+						<label class="label" for="control_sub">
 							<span class="label-text-alt text-error {formErrors.control_sub ? '' : 'hidden'}"
 								>MQTT topic is limited to 64 characters</span
 							>
@@ -284,6 +305,25 @@
 						/>
 						<label class="label" for="safestate_sub">
 							<span class=" text-error {formErrors.safestate_sub ? '' : 'hidden'}"
+								>MQTT topic is limited to 64 characters</span
+							>
+						</label>
+					</div>
+					<div>
+						<label class="label" for="identification">Identification Status Topic </label>
+						<input
+							type="text"
+							class="input w-full invalid:border-error invalid:border-2 {formErrors.identification
+								? 'border-error border-2'
+								: ''}"
+							bind:value={brokerSettings.identification_topic_pub}
+							id="identification"
+							min="0"
+							max="64"
+							required
+						/>
+						<label class="label" for="identification">
+							<span class=" text-error {formErrors.identification ? '' : 'hidden'}"
 								>MQTT topic is limited to 64 characters</span
 							>
 						</label>

@@ -206,6 +206,37 @@ This REST endpoint configures the motor driver and important parameters during r
 }
 ```
 
+### Identification Service
+
+The identification API provides a way to identify and provision a device. It sends various parameters like IP, MAC and unique identifiers which are useful. This can be used to enable a software mainly using MQTT to know the devices IP to call its REST API.
+
+> Defined in `IdentificationService.h`
+
+| Method | URL            | retained |
+| ------ | -------------- | -------- |
+| GET    | /rest/identify |          |
+| MQTT   | -              | yes      |
+
+| Parameter       | Type   | Info                                                                                         |
+| --------------- | ------ | -------------------------------------------------------------------------------------------- |
+| UniqueID        | string | A unique id to identify each device                                                          |
+| UniqueName      | string | A unique name to identify the device. By default it matches the AP point SSID and host name. |
+| IP              | string | The currently assigned IP address in station mode                                            |
+| MAC             | string | The MAC address of the ESP32                                                                 |
+| FirmwareVersion | string | Firmware version used on the device                                                          |
+
+**JSON**
+
+```JSON
+{
+    "UniqueID":"cc8da220b1f4",
+    "UniqueName":"LUST-motion-cc8da220b1f4",
+    "IP":"192.168.1.177",
+    "MAC":"CC:8D:A2:20:B1:F4",
+    "FirmwareVersion": "0.1.0",
+}
+```
+
 ## Raw Data Streaming
 
 > Defined in `RawDataStreaming.h`

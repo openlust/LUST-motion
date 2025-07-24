@@ -63,6 +63,7 @@ export type BrokerSettings = {
 	environment_topic_pub: string;
 	safestate_topic_pub: string;
 	safestate_topic_sub: string;
+	identification_topic_pub: string;
 };
 
 export type NTPStatus = {

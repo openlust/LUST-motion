@@ -20,6 +20,7 @@
 #include <SafeStateService.h>
 #include <RawDataStreaming.h>
 #include <StatusMonitor.h>
+#include <IdentificationService.h>
 
 #define SERIAL_BAUD_RATE 115200
 
@@ -65,6 +66,10 @@ StrokeEngineEnvironmentService strokeEngineEnvironmentService = StrokeEngineEnvi
 DataStreamer dataStream = DataStreamer(&esp32sveltekit, &Stroker);
 
 StatusMonitor statusMonitor = StatusMonitor(&esp32sveltekit);
+
+IdentificationService identificationService = IdentificationService(&server,
+                                                                    &esp32sveltekit,
+                                                                    &mqttBrokerSettingsService);
 
 /*#################################################################################################
 ##
@@ -139,6 +144,9 @@ void setup()
 
     // Start the safe state & watchdog service
     safeStateService.begin();
+
+    // Start the identification service
+    identificationService.begin();
 
     // Add loop callbacks to ESP32-SvelteKit
     esp32sveltekit.addLoopFunction([]()
