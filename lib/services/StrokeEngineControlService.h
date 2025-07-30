@@ -22,8 +22,8 @@
 #include <MqttBrokerSettingsService.h>
 #include <HeartbeatWatchdog.h>
 
-#ifdef OSSM_REF
-#include <OSSMReferenceBoard.h>
+#ifdef MOTOR_BOARD_H
+#include MOTOR_BOARD_H
 // else throw compile error
 #else
 #error "No board defined"

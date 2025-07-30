@@ -44,8 +44,8 @@ void MotorConfigurationService::begin()
         ESP_LOGI("MotorConfigurationService", "Using GenericStepperMotor");
         genericMotorInstance = new GenericStepperMotor();
         genericMotorInstance->begin(&genericMotorProperties);
-        genericMotorInstance->setSensoredHoming(ENDSTOP_PIN, INPUT_PULLUP, true, 0.0, MOTION_HOMING_SPEED);
-        genericMotorInstance->setStepsPerMillimeter(_state.stepPerRev / (_state.pulleyTeeth * BELT_PITCH));
+        genericMotorInstance->setSensoredHoming(BOARD_ENDSTOP_PIN, INPUT_PULLUP, true, 0.0, MOTION_HOMING_SPEED);
+        genericMotorInstance->setStepsPerMillimeter(_state.stepPerRev / (_state.pulleyTeeth * BOARD_BELT_PITCH));
         genericMotorInstance->invertDirection(_state.invertDirection);
         _motor = static_cast<MotorInterface *>(genericMotorInstance);
         _loadedDriver = GENERIC_STEPPER;
@@ -54,8 +54,8 @@ void MotorConfigurationService::begin()
         ESP_LOGI("MotorConfigurationService", "Using OSSMRefBoardV2Motor");
         OSSMMotorInstance = new OSSMRefBoardV2Motor();
         OSSMMotorInstance->begin(&OSSMMotorProperties);
-        OSSMMotorInstance->setSensorlessHoming(MAX_AMPERE * (_state.sensorlessTrigger / 100.0), MOTION_HOMING_SPEED);
-        OSSMMotorInstance->setStepsPerMillimeter(_state.stepPerRev / (_state.pulleyTeeth * BELT_PITCH));
+        OSSMMotorInstance->setSensorlessHoming(BOARD_MAX_AMPERE * (_state.sensorlessTrigger / 100.0), MOTION_HOMING_SPEED);
+        OSSMMotorInstance->setStepsPerMillimeter(_state.stepPerRev / (_state.pulleyTeeth * BOARD_BELT_PITCH));
         OSSMMotorInstance->invertDirection(_state.invertDirection);
         _motor = static_cast<MotorInterface *>(OSSMMotorInstance);
         _loadedDriver = OSSM_REF_BOARD_V2;
@@ -69,7 +69,7 @@ void MotorConfigurationService::begin()
     }
 
     // set motor parameters
-    _motor->setMaxSpeed((_state.maxRPM / 60.0) * _state.pulleyTeeth * BELT_PITCH);
+    _motor->setMaxSpeed((_state.maxRPM / 60.0) * _state.pulleyTeeth * BOARD_BELT_PITCH);
     _motor->setMaxAcceleration(_state.maxAcceleration);
     _motor->setMachineGeometry(_state.travel, _state.keepout);
 

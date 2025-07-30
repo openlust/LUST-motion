@@ -20,13 +20,6 @@
 #include <genericStepper.h>
 #include <OSSMRefBoardV2.h>
 
-#ifdef OSSM_REF
-#include <OSSMReferenceBoard.h>
-// else throw compile error
-#else
-#error "No board defined"
-#endif
-
 #ifndef MOTION_FACTORY_TRAVEL
 #define MOTION_FACTORY_TRAVEL 150.0
 #endif
@@ -44,28 +37,29 @@ enum MotorDriver
     VIRTUAL,
     GENERIC_STEPPER,
     OSSM_REF_BOARD_V2,
-    IHSV_SERVO_V6
+    IHSV_SERVO_V6,
+    LINMOT
 };
 
 static motorProperties genericMotorProperties{
-    .enableActiveLow = ENABLE_ACTIVE_LOW,
-    .stepPin = STEP_PIN,
-    .directionPin = DIRECTION_PIN,
-    .enablePin = ENABLE_PIN,
+    .enableActiveLow = BOARD_ENABLE_ACTIVE_LOW,
+    .stepPin = BOARD_STEP_PIN,
+    .directionPin = BOARD_DIRECTION_PIN,
+    .enablePin = BOARD_ENABLE_PIN,
 };
 
 static OSSMRefBoardV2Properties OSSMMotorProperties{
-    .enableActiveLow = ENABLE_ACTIVE_LOW,
-    .stepPin = STEP_PIN,
-    .directionPin = DIRECTION_PIN,
-    .enablePin = ENABLE_PIN,
-    .alarmPin = ALARM_PIN,
-    .inPositionPin = IN_POSITION_PIN,
-    .ADCPinCurrent = ADC_PIN_CURRENT,
-    .AmperePermV = AMPERE_PER_MILLIVOLT,
-    .AmpereOffsetInmV = AMPERE_OFFSET_IN_MILLIVOLT,
-    .ADCPinVoltage = ADC_PIN_VOLTAGE,
-    .VoltPermV = VOLT_PER_MILLIVOLT,
+    .enableActiveLow = BOARD_ENABLE_ACTIVE_LOW,
+    .stepPin = BOARD_STEP_PIN,
+    .directionPin = BOARD_DIRECTION_PIN,
+    .enablePin = BOARD_ENABLE_PIN,
+    .alarmPin = BOARD_ALARM_PIN,
+    .inPositionPin = BOARD_IN_POSITION_PIN,
+    .ADCPinCurrent = BOARD_ADC_PIN_CURRENT,
+    .AmperePermV = BOARD_AMPERE_PER_MILLIVOLT,
+    .AmpereOffsetInmV = BOARD_AMPERE_OFFSET_IN_MILLIVOLT,
+    .ADCPinVoltage = BOARD_ADC_PIN_VOLTAGE,
+    .VoltPermV = BOARD_VOLT_PER_MILLIVOLT,
 };
 
 class MotorConfiguration
@@ -81,7 +75,7 @@ public:
     boolean home;
     float travel;
     float keepout;
-    float sensorlessTrigger = SENSORLESS_TRIGGER;
+    float sensorlessTrigger = BOARD_SENSORLESS_TRIGGER;
 
     static void read(MotorConfiguration &settings, JsonObject &root)
     {
@@ -97,6 +91,9 @@ public:
         case OSSM_REF_BOARD_V2:
             root["driver"] = "OSSM_REF_BOARD_V2";
             break;
+        case LINMOT:
+            root["driver"] = "LINMOT";
+            break;
         default:
             root["driver"] = "VIRTUAL";
             break;
@@ -106,6 +103,7 @@ public:
         JsonArray drivers = root["driver_list"].to<JsonArray>();
         // add drivers
         drivers.add("VIRTUAL");
+        drivers.add("LINMOT");
 #ifdef DRIVER_GENERIC_STEPPER
         drivers.add("GENERIC_STEPPER");
 #endif
@@ -136,20 +134,24 @@ public:
             return StateUpdateResult::CHANGED;
         }
 
-        settings.stepPerRev = root["steps_per_rev"] | STEP_PER_REV;
-        settings.maxRPM = root["max_rpm"] | MAX_RPM;
-        settings.maxAcceleration = root["max_acceleration"] | MAX_ACCELERATION;
-        settings.pulleyTeeth = root["pulley_teeth"] | PULLEY_TEETH;
-        settings.invertDirection = root["invert_direction"] | INVERT_DIRECTION;
+        settings.stepPerRev = root["steps_per_rev"] | BOARD_STEP_PER_REV;
+        settings.maxRPM = root["max_rpm"] | BOARD_MAX_RPM;
+        settings.maxAcceleration = root["max_acceleration"] | BOARD_MAX_ACCELERATION;
+        settings.pulleyTeeth = root["pulley_teeth"] | BOARD_PULLEY_TEETH;
+        settings.invertDirection = root["invert_direction"] | BOARD_INVERT_DIRECTION;
         settings.travel = root["travel"] | MOTION_FACTORY_TRAVEL;
-        settings.keepout = root["keepout"] | KEEP_OUT;
-        settings.sensorlessTrigger = root["sensorless_trigger"] | SENSORLESS_TRIGGER;
+        settings.keepout = root["keepout"] | BOARD_KEEP_OUT;
+        settings.sensorlessTrigger = root["sensorless_trigger"] | BOARD_SENSORLESS_TRIGGER;
 
         // translate the string to an enum
         String driver = root["driver"] | "VIRTUAL";
         if (driver == "VIRTUAL")
         {
             settings.driver = VIRTUAL;
+        }
+        else if (driver == "LINMOT")
+        {
+            settings.driver = LINMOT;
         }
 #ifdef DRIVER_GENERIC_STEPPER
         else if (driver == "GENERIC_STEPPER")

@@ -1,20 +1,31 @@
+# Ignore hidden folders
 .pio
 .clang_complete
 .gcc-flags.json
+.vscode
+.aid
 *Thumbs.db
+
 /data/www
 /interface/build
 /interface/node_modules
 /interface/.eslintcache
-.vscode
-node_modules
 /releases
-/src/certs
 /temp
 /build
-/lib/framework/WWWData.h
-*WWWData.h
-lib/framework/WWWData.h
-ssl_certs/cacert.pem
 /logs
-.aid
+node_modules
+
+# Ignore the built interface file
+/lib/framework/WWWData.h
+lib/framework/WWWData.h
+*WWWData.h
+
+/src/certs
+ssl_certs/cacert.pem
+
+# To update the defaults, use `git add --force ./factory_settings.ini`
+# These will be modified during development to help reduce initial device setup time on re-flash
+# We ignore them to prevent development changes for reaching main
+factory_settings.ini
+dev_settings.ini

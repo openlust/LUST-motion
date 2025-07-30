@@ -28,7 +28,7 @@ public:
 
     void begin()
     {
-        FastLED.addLeds<WS2812, NEOPIXEL_PIN, GRB>(led, 1);
+        FastLED.addLeds<WS2812, BOARD_NEOPIXEL_PIN, GRB>(led, 1);
     }
 
     void loop()
