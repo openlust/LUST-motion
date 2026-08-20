@@ -62,15 +62,24 @@ needs no `Flags` AD structure, which leaves the full 31-byte budget for one AD s
  byte   2  |  Company Identifier, little endian                  (2)
 --------------------------- Quick Play payload -----------------------------
  byte   4  |  Magic = 0x51 ('Q')                                 (1)
- byte   5  |  Version = 0x01                                     (1)
+ byte   5  |  Version, high nibble = 0x1  |  Flags, low nibble   (1)
  byte   6  |  Session ID, little endian, 0x0000 = open session   (2)
  byte   8  |  Sequence                                           (1)
- byte   9  |  Record, repeated until the end of the AD structure (2+)
+ byte   9  |  Source ID, little endian   — only if Flags bit 0   (4)
+ byte  ..  |  Records, until the end of the AD structure         (2+)
+ byte  ..  |  Authentication tag         — only if Flags bit 1   (4)
 ```
 
+| Flags bit | Meaning                                                             |
+| --------- | ------------------------------------------------------------------- |
+| 0         | A 4-byte Source ID follows the header (emitter has no stable address) |
+| 1         | The last 4 bytes of the AD structure are an authentication tag       |
+| 2–3       | Reserved, must be 0                                                  |
+
 Budget: 31 − 4 bytes of AD and Company ID overhead = 27 bytes of payload; minus the 5-byte
-header leaves 22 bytes, i.e. **up to 11 tag records in a single advertisement**, or 9 records
-alongside the optional 4-byte authentication tag. That is far more than any real device needs.
+header leaves 22 bytes, i.e. **up to 11 tag records in a single advertisement** — 9 with a
+Source ID, 7 with both a Source ID and an authentication tag. Still more than any real device
+needs.
 
 ### Records
 
@@ -135,9 +144,21 @@ data path — it is a configuration-time concern. A device that wants to be name
 scan response, so a UI building a device list can ask for it once without putting a single byte
 of it into the intensity stream.
 
-This does require that a participant's address stay stable **for the duration of a session**; a
-rotating resolvable private address would fragment one source into many. See
-[Security and Privacy](#security-and-privacy) for how to keep both stability and privacy.
+This does require that a participant's address stay stable **for the duration of a session**.
+Firmware on a dedicated toy controls its own address and simply keeps it fixed while Quick Play
+is running. An Android app does not: the platform assigns a private address and rotates it
+roughly every 15 minutes, and the app can neither choose nor read it.
+
+For those emitters, Flags bit 0 adds a 4-byte **Source ID** to the payload, and receivers key
+their source table on that instead of the address. It is chosen once at install time, is stable
+across address rotations and restarts, and costs two record slots. Devices with a stable address
+of their own should leave the flag clear and save the bytes.
+
+Address rotation does not disturb the data path even without a Source ID — a rotated emitter
+simply appears as a new source, and its old entry expires 1.5 s later while carrying the same
+state, so `max()` arbitration returns the same answer throughout. What rotation does break is
+allow-listing, which is why the Source ID exists. See
+[Security and Privacy](#security-and-privacy).
 
 ## Timing and Radio Parameters
 
@@ -169,7 +190,9 @@ Consumers scan passively with a duty cycle of at least 50 % (e.g. 30 ms window /
 (1.5 s ÷ advertising interval) × scan duty cycle  ≥  5
 ```
 
-At 150 ms and 50 % duty this gives exactly 5 expected receptions and a total-loss probability
+Emitters therefore choose the interval and consumers choose the duty cycle to match it; a faster
+emitter directly buys every consumer in the room a lower scan duty cycle, and with it battery
+life. At 150 ms and 50 % duty this gives exactly 5 expected receptions and a total-loss probability
 below 0.1 % per window. At 300 ms and 50 % it gives 2.5, which is not enough — either advertise
 faster or scan harder. Airtime is cheap: a full-length legacy advertisement is 376 µs, about
 1.13 ms per event across all three channels, so ten emitters at 150 ms occupy roughly 7.5 % of
@@ -240,6 +263,15 @@ inject without knowing and spoofing an allow-listed address, and there is no way
 learn it except by being in range and sniffing. This costs nothing on the wire and fits the
 spec's emphasis on simplicity.
 
+**Allow-listing needs a Source ID for phone emitters.** A consumer cannot allow-list an Android
+app by address, because the address rotates and the app itself cannot read it. Such emitters set
+Flags bit 0 and are allow-listed by their 4-byte Source ID instead. Be clear-eyed about the
+downgrade: a Source ID travels in the clear in every packet, so anyone who has heard one
+advertisement can spoof it, whereas spoofing an address at least takes a controller willing to
+transmit an arbitrary one. Source-ID allow-listing keeps honest devices apart; it does not keep
+an attacker out. A session with phone emitters in it that also cares about injection should use
+authentication.
+
 **Authentication for hostile environments** — a public play space, a party, anywhere the guest
 list is not the room. Derive a session key from the session passphrase with HKDF, and append a
 4-byte truncated CMAC over `session id ‖ sequence ‖ records` to the payload (budget: 9 records
@@ -278,13 +310,61 @@ cannot afford WLAN.
 | Broker / Facilitator       | Must stay powered for the whole session  | Does not exist                               |
 
 An emit-only device never scans at all, which is the expensive half of BLE. At a 150 ms
-advertising interval while active and 1 s while idle, it is in the microamp-average range.
+advertising interval an nRF52840 averages roughly **50 µA**, so a CR2032 runs it for about six
+months of continuous play readiness; at the 1 s idle interval it is under 10 µA. Watch the cell's
+internal resistance rather than the average — a coin cell needs a bypass capacitor to serve the
+~5 mA transmit pulse without its voltage sagging.
+
+### Scanning: what an always-listening acting toy costs
+
+Scanning is the cost that decides how long a toy can sit waiting to be told to do something. Once
+it is actually moving, the motor dominates by two or three orders of magnitude and none of this
+matters. Radio-on current, datasheet typical at 3 V with DC/DC, plus about 15 % for host stack
+processing:
+
+| Part          | 100 % duty | 50 % duty | 33 % duty | 25 % duty |
+| ------------- | ---------- | --------- | --------- | --------- |
+| nRF52840      | 5.3 mA     | 2.6 mA    | 1.8 mA    | 1.3 mA    |
+| nRF52832      | 6.2 mA     | 3.1 mA    | 2.1 mA    | 1.6 mA    |
+| ESP32-H2      | 22 mA      | 11 mA     | 7.2 mA    | 5.5 mA    |
+| ESP32-C3      | 26 mA      | 13 mA     | 8.7 mA    | 6.6 mA    |
+| ESP32 (orig.) | 109 mA     | 55 mA     | 36 mA     | 27 mA     |
+
+The nRF is roughly 5× better than the best ESP32 variant and about 20× better than the original
+ESP32. In standby time on a 1000 mAh cell, with the motor idle:
+
+| Scan duty | nRF52840 | ESP32-C3 |
+| --------- | -------- | -------- |
+| 100 %     | ~8 days  | ~38 h    |
+| 50 %      | ~16 days | ~76 h    |
+| 33 %      | ~24 days | ~5 days  |
+
+The sizing rule is what makes the lower rows reachable: against emitters advertising at 100 ms, a
+consumer at 33 % duty still expects 5 receptions per decay window. Continuous scanning buys
+nothing over that — it is the emitter's interval, not the consumer's diligence, that sets
+responsiveness.
+
+Two second-order costs are worth knowing:
+
+- **Controller-side filtering saves the host share.** An nRF scanning with an accept list drops
+  non-matching advertisements in the link layer without waking the CPU. This works only for
+  allow-listed stable addresses, so a session containing Android emitters — whose addresses
+  rotate — cannot use it, and the CPU must wake for every advertisement in the room to check the
+  Source ID.
+- **Crowded rooms cost real current.** At roughly 300 µs of CPU per advertisement report,
+  50 adv/s adds a negligible 0.05 mA, 200 adv/s adds 0.2 mA, and a genuinely dense environment at
+  1000 adv/s adds about 1 mA — which at 33 % duty is over half the scan budget again. Filter on
+  magic, version and session ID as early as the stack allows.
+
+These are datasheet arithmetic, not measurements; treat them as a sanity check on a design and
+measure the real thing before committing to a cell size.
 
 ## Connection Mode (fallback)
 
-Broadcast is the default and should be preferred. A connection-oriented mode is defined for
-three cases where broadcast cannot be used: emitting from an iOS app, longer range via a
-connection on Coded PHY, and any situation wanting delivery confirmation.
+Broadcast is the default and should be preferred. A connection-oriented mode is defined for the
+cases where broadcast cannot serve: longer range over a connection on Coded PHY, delivery
+confirmation where it is genuinely wanted, and platforms that cannot advertise arbitrary payloads
+at all (notably iOS apps).
 
 A minimal GATT service, carrying the identical payload so that one parser serves both modes:
 
@@ -337,16 +417,51 @@ drops anything it recognises as having originated on the other side.
 
 | Platform                    | Emit                                        | Consume |
 | --------------------------- | ------------------------------------------- | ------- |
+| nRF52 / nRF53 / nRF54       | Yes, full control of payload and interval   | Yes     |
 | ESP32 (BT 4.2)              | Yes, legacy adv, one advertising set        | Yes     |
 | ESP32-C3/S3/C6/H2 (BLE 5)   | Yes, plus extended adv and Coded PHY        | Yes     |
-| Android app                 | Yes, `AdvertiseData.addManufacturerData`    | Yes     |
-| iOS app                     | **No** — CoreBluetooth will not advertise manufacturer data from third-party apps; use Connection Mode | Yes |
+| Android app                 | Yes, with the caveats below                 | Yes     |
+| iOS app                     | No — CoreBluetooth will not advertise manufacturer data from third-party apps; use Connection Mode | Yes |
 | Browser / Web Bluetooth     | No                                          | Not reliably; `watchAdvertisements` is limited |
 
-The iOS restriction is the one with real design consequences: an iPhone can listen to a Quick
-Play session and can drive devices through Connection Mode, but it cannot be a broadcast emitter.
-Any design that assumes a phone as the sensing source needs Connection Mode or a hardware
-intermediary.
+### Android
+
+Android is a first-class emitter. `AdvertiseData.Builder.addManufacturerData()` takes an arbitrary
+company ID and arbitrary bytes, so the wire format above goes out unmodified. Four things bite:
+
+**Use `startAdvertisingSet()`, not `startAdvertising()`.** The legacy `AdvertiseSettings` API does
+not expose an interval — only three modes, and their fixed intervals decide whether Quick Play
+works at all:
+
+| `setAdvertiseMode()`            | Interval | Expected receptions per 1.5 s at 50 % scan duty |
+| ------------------------------- | -------- | ----------------------------------------------- |
+| `ADVERTISE_MODE_LOW_POWER` (default) | 1000 ms | 0.8 — unusable, decay chatters constantly   |
+| `ADVERTISE_MODE_BALANCED`       | 250 ms   | 3.0 — too thin, needs 100 % scan duty           |
+| `ADVERTISE_MODE_LOW_LATENCY`    | 100 ms   | 7.5 — fine                                      |
+
+So on the legacy API, `LOW_LATENCY` is the only viable setting, and the default is the worst
+possible choice. `BluetoothLeAdvertiser.startAdvertisingSet()` (API 26+) is better in every way:
+`AdvertisingSetParameters.setInterval()` takes 0.625 ms units directly, so 150 ms is expressible,
+and `setLegacyMode(true)` keeps the packets visible to legacy-only scanners while still giving
+exact interval control. Prefer it, and fall back to `LOW_LATENCY` only on older devices.
+
+**Guard the 31 bytes.** Android builds the AD structures for you and rejects the whole
+advertisement with `ADVERTISE_FAILED_DATA_TOO_LARGE` if it overflows. Leave
+`setIncludeDeviceName(false)` and `setIncludeTxPowerLevel(false)` — each costs 3 bytes and the
+device name in particular can be long enough to blow the budget on its own. Non-connectable
+advertising omits the 3-byte `Flags` structure, so the full 27-byte Quick Play payload fits.
+
+**The address rotates and you cannot see it.** This is the one real design consequence: an Android
+emitter must set Flags bit 0 and carry a Source ID, because neither `origin` identity nor
+allow-listing can rest on its address. See [Identity](#identity).
+
+**Sustained advertising needs a foreground service.** Background execution limits will otherwise
+stop the advertiser when the app leaves the foreground, and Doze will interfere. Android 12+ also
+requires the `BLUETOOTH_ADVERTISE` runtime permission, and `BLUETOOTH_SCAN` for consuming —
+declare the latter with `usesPermissionFlags="neverForLocation"` to avoid dragging in location
+permission for what is not a location feature.
+
+### Company Identifier
 
 The Company Identifier should be a project-owned assignment from the Bluetooth SIG. Until one is
 held, `0xFFFF` (reserved for internal and development use) works, with the magic byte and version
@@ -358,7 +473,7 @@ field filtering out the inevitable collisions with other people's test devices. 
 | Original Quick Play feature                    | Status over BLE                                                    |
 | ---------------------------------------------- | ------------------------------------------------------------------ |
 | Ad-hoc, no central infrastructure              | Improved — the broker and the Facilitator step are gone             |
-| `origin` / `tag` / `intensity` message         | Preserved, binary-encoded; origin is free in the packet header      |
+| `origin` / `tag` / `intensity` message         | Preserved, binary-encoded; origin is free in the packet header, or a 4-byte Source ID where the address rotates |
 | Five default tags, custom tags allowed         | Preserved; defaults cost 1 byte, custom tags carry their name inline |
 | Intensity 0.0 – 100.0, cropped                 | Preserved as 0–200 in 0.5 % units, clamped                          |
 | Executed ~1.5 s, then decays to 0.0            | Preserved as a per-source expiry, plus faster per-tag zeroing       |
@@ -386,5 +501,8 @@ building, which is a limitation for large spaces and a security property everywh
 - **Tag namespace growth.** Codes `0x06`–`0xFE` are open. Adding well-known codes is cheap, but
   every addition is a compatibility question for older consumers, which should ignore unknown
   codes rather than treat them as custom.
+- **Should a Source ID be derived rather than random?** Deriving it from the session key would
+  make it unspoofable without authenticating every packet, at the cost of changing whenever the
+  session code changes.
 - **Bridging between sessions.** Nothing prevents a device from bridging two session IDs, which
   could be either a useful way to federate rooms or a good way to surprise somebody.
