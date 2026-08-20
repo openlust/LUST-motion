@@ -24,7 +24,7 @@ property that made the broker necessary in MQTT is absent from Quick Play:
 | Messages are idempotent state, not events         | No ordering, no delivery guarantee, no queue needed  |
 | Repeat every second as keep-alive                 | Retransmission is already built into the protocol    |
 | Absence of messages means 0.0                     | Loss is self-healing and fails safe                  |
-| Rate capped at 5 Hz, not a pattern generator      | Latency budget is hundreds of milliseconds, not tens |
+| Rate capped at 5 Hz, not a pattern generator      | Information rate is low, though the latency target is not |
 | Highest intensity wins, evaluated per consumer    | Arbitration is receiver-side; no central logic       |
 | One topic, everyone sees everything               | No routing, no subscriptions to manage               |
 
@@ -174,14 +174,32 @@ the keep-alive. Nothing about the observable behaviour changes.
 | Executed for roughly 1.5 s, then falls to 0.0     | Per-source expiry 1500 ms after the last received advertisement      |
 | Never emit 0.0                                    | Omit the record                                                      |
 
-Recommended parameters:
+Two parameter profiles, chosen by whether the pairing has a hard latency target:
 
-| State                       | Advertising interval | Notes                                        |
-| --------------------------- | -------------------- | -------------------------------------------- |
-| Emitting (any tag non-zero) | 100 – 150 ms         | 0.75 – 1.1 % channel time per emitter        |
-| Idle (all tags zero)        | 1000 ms, or stop     | Presence beacon only; consumers already decayed |
+| Profile              | Emitter interval          | Consumer scan | Use for                                    |
+| -------------------- | ------------------------- | ------------- | ------------------------------------------ |
+| **Responsive**       | 20 – 30 ms on change, backing off to 150 ms | Continuous | A sensor edge driving an actuator          |
+| **Ambient**          | 100 – 150 ms              | ≥ 50 % duty   | Slow intensity following, mood-level signals |
+| Idle (all tags zero) | 1000 ms, or stop advertising | —          | Presence beacon; consumers have already decayed |
 
-Consumers scan passively with a duty cycle of at least 50 % (e.g. 30 ms window / 60 ms interval).
+The Ambient profile is what the original spec's timing implies and is much cheaper. Use the
+Responsive profile only where the latency actually matters — see [Latency](#latency) for why
+duty-cycled scanning cannot meet a sub-100 ms target at any advertising rate.
+
+### Adaptive rate
+
+Advertising at 20 ms continuously to carry a 5 Hz signal wastes airtime by roughly 6×, and
+airtime is what limits how many devices share a room. The fix follows directly from the original
+spec's own rule — message on change, then repeat as keep-alive — by giving the two jobs different
+rates:
+
+- **On change**, advertise at 20 – 30 ms for about 200 ms. This burst carries the edge and is what
+  the latency budget is spent on.
+- **Then back off** to the 150 ms keep-alive rate until the next change.
+
+An emitter changing state once per second averages about 11 advertising events per second instead
+of 33, so the room holds roughly three times as many devices at the same responsiveness. Nothing
+in the receiver changes — it cannot tell a burst from a keep-alive, and does not need to.
 
 **Sizing rule.** Choose parameters so that a consumer expects at least five receptions inside the
 1.5 s decay window, otherwise the decay will chatter on ordinary packet loss:
@@ -197,6 +215,86 @@ below 0.1 % per window. At 300 ms and 50 % it gives 2.5, which is not enough —
 faster or scan harder. Airtime is cheap: a full-length legacy advertisement is 376 µs, about
 1.13 ms per event across all three channels, so ten emitters at 150 ms occupy roughly 7.5 % of
 the advertising channels. Congestion is not the limit; scan duty cycle and power are.
+
+## Latency
+
+The chain from a sensor edge to an actuator moving:
+
+| Stage                                | Typical | Worst case      |
+| ------------------------------------ | ------- | --------------- |
+| Sense and debounce on the emitter    | 5 ms    | 15 ms           |
+| Payload update waits for the next advertising event | T/2 | T + 10 ms (BLE's mandatory random advDelay) |
+| Air time, plus the scanner's host stack | 1 ms  | 3 ms            |
+| Arbitration and the consumer's control cycle | 2 ms | 10 ms        |
+| Actuator starts moving               | 5 ms    | 20 ms           |
+
+Everything except the second row is fixed at roughly 35 ms worst case, so the advertising interval
+is the entire design freedom:
+
+| Advertising interval | Typical end-to-end | Worst case | Under 100 ms? |
+| -------------------- | ------------------ | ---------- | ------------- |
+| 20 ms                | 23 ms              | 78 ms      | yes           |
+| 30 ms                | 28 ms              | 88 ms      | yes           |
+| 50 ms                | 38 ms              | 108 ms     | marginal      |
+| 100 ms               | 63 ms              | 158 ms     | no            |
+
+**Consumers must scan continuously to hit this.** With continuous scanning the advertiser touches
+all three channels each event while the scanner sits on one of them, so every event is received
+and the wait is just the interval. Duty cycling breaks that badly: a consumer at 50 % duty
+(30 ms window / 60 ms interval) against a 100 ms emitter averages 190 ms and has a 95th percentile
+over half a second, because it must wait for a scan window and an advertising event to coincide.
+There is no advertising rate that rescues a duty-cycled scanner — the fix has to be on the
+consumer side.
+
+This is the profile's real cost, and it is power, not complexity: continuous scanning is roughly
+5.3 mA on an nRF52840 against 1.8 mA at 33 % duty, or about 8 days of standby on a 1000 mAh cell
+instead of 24. A latency-critical actuator is a device that must be plugged in or generously
+celled. Note also that BLE 4.x floors non-connectable advertising at 100 ms; the 20 – 30 ms
+interval needs the Bluetooth 5 minimum of 20 ms, which every nRF52 and every ESP32 except the
+original supports.
+
+## How Many Devices Fit in One Room
+
+The limit is airtime on the three advertising channels, and it applies **only to emitters**. A
+consumer that merely scans contributes nothing to the channel, so the number of listening toys is
+unbounded — fifty actuators can follow one sensor at no cost. This maps neatly onto the original
+spec's own picture of one sensing toy driving several acting toys.
+
+Advertisers are decorrelated by BLE's random advDelay, so collisions behave like slotless ALOHA
+with a vulnerable window of two packet times. Per-event loss for a full 31-byte packet:
+
+| Emitters | T = 20 ms | T = 30 ms | T = 100 ms | T = 150 ms |
+| -------- | --------- | --------- | ---------- | ---------- |
+| 3        | 7 %       | 5 %       | 1.5 %      | 1 %        |
+| 5        | 14 %      | 10 %      | 3 %        | 2 %        |
+| 10       | 29 %      | 20 %      | 6.5 %      | 4 %        |
+| 20       | 51 %      | 38 %      | 13 %       | 9 %        |
+| 50       | 84 %      | 71 %      | 31 %       | 22 %       |
+
+Loss is not the same as failure — a lost event is retried one interval later, which is why the
+Responsive profile tolerates it. Holding the 95th-percentile end-to-end latency under 100 ms at a
+30 ms interval works up to about **10 simultaneous emitters**; beyond that the tail crosses the
+budget even though the mean stays low. For the Ambient profile, where the 1.5 s decay window is
+the only thing that must be met, 20 or more emitters are fine.
+
+Practical ceilings:
+
+| Scenario                                     | Realistic emitters |
+| -------------------------------------------- | ------------------ |
+| Responsive profile, hard 100 ms budget       | 5 comfortably, 10 at the limit |
+| Responsive profile with adaptive rate        | ~15, since bursts are brief    |
+| Ambient profile                              | 20 – 30                        |
+| Consumers, any profile                       | Unbounded                      |
+
+Two things make these numbers optimistic. They count Quick Play traffic only, while a real room
+also holds phones, watches, earbuds and beacons — the advertising channels sit in the gaps between
+Wi-Fi channels 1, 6 and 11 by design, but a busy 2.4 GHz band still adds losses that behave like
+extra emitters. And they assume full 31-byte packets; an emitter carrying two records instead of
+eleven occupies 232 µs instead of 376 µs and raises capacity by about 60 %, which is a good reason
+not to advertise tags that are sitting at zero.
+
+The honest summary is that the protocol's ceiling is well above the social one. A scene with more
+than a handful of *emitting* toys is unusual, and that is the regime this is designed for.
 
 ## Receiver Behaviour
 
@@ -340,9 +438,15 @@ ESP32. In standby time on a 1000 mAh cell, with the motor idle:
 | 33 %      | ~24 days | ~5 days  |
 
 The sizing rule is what makes the lower rows reachable: against emitters advertising at 100 ms, a
-consumer at 33 % duty still expects 5 receptions per decay window. Continuous scanning buys
-nothing over that — it is the emitter's interval, not the consumer's diligence, that sets
-responsiveness.
+consumer at 33 % duty still expects 5 receptions per decay window, which is all the Ambient
+profile needs.
+
+The Responsive profile is a different story. A sub-100 ms budget forces continuous scanning — see
+[Latency](#latency) — and with it the top row of the table: roughly 3× the standby current, about
+8 days on a 1000 mAh cell instead of 24. That trade is the main price of the latency target, and
+it is worth making per device rather than globally. An actuator that must respond to a sensor edge
+scans continuously and is probably mains-powered or generously celled; everything else in the room
+duty-cycles.
 
 Two second-order costs are worth knowing:
 
@@ -445,6 +549,12 @@ possible choice. `BluetoothLeAdvertiser.startAdvertisingSet()` (API 26+) is bett
 and `setLegacyMode(true)` keeps the packets visible to legacy-only scanners while still giving
 exact interval control. Prefer it, and fall back to `LOW_LATENCY` only on older devices.
 
+**Android cannot meet a sub-100 ms budget as an emitter.** `AdvertisingSetParameters.INTERVAL_MIN`
+is 160 units, i.e. 100 ms, and the legacy API's fastest mode is the same. That floor alone puts
+worst-case delivery at 110 ms before the sensor or the actuator has done anything, so the
+Responsive profile is closed to phones. An Android device is a fine ambient emitter and a fine
+consumer; a latency-critical sensor has to be firmware on an nRF or ESP32.
+
 **Guard the 31 bytes.** Android builds the AD structures for you and rejects the whole
 advertisement with `ADVERTISE_FAILED_DATA_TOO_LARGE` if it overflows. Leave
 `setIncludeDeviceName(false)` and `setIncludeTxPowerLevel(false)` — each costs 3 bytes and the
@@ -483,7 +593,7 @@ field filtering out the inevitable collisions with other people's test devices. 
 | Devices emit several tags; consumers filter    | Preserved and improved — all tags in one atomic packet              |
 | Several networks coexisting in one space       | Preserved via the 16-bit Session ID                                 |
 | Each toy keeps its regular API                 | Preserved — a second advertising set on BLE 5, time-sliced on 4.2   |
-| Not a pattern generator                        | Unchanged; ~150 ms latency suits a ≤5 Hz behavioural signal         |
+| Not a pattern generator                        | Unchanged as an information rate; latency is a separate budget, met by the Responsive profile |
 | Simplicity of setup                            | Improved — four steps become three                                  |
 
 Two things are strictly better: setup loses a step and a single point of failure, and battery
@@ -501,6 +611,10 @@ building, which is a limitation for large spaces and a security property everywh
 - **Tag namespace growth.** Codes `0x06`–`0xFE` are open. Adding well-known codes is cheap, but
   every addition is a compatibility question for older consumers, which should ignore unknown
   codes rather than treat them as custom.
+- **Should the profile be negotiated or configured?** Nothing in the payload says which profile
+  an emitter is using, so a consumer cannot know whether it needs to scan continuously. A flags
+  bit would let an emitter ask for it, at the cost of letting any device in the room drain its
+  neighbours' batteries.
 - **Should a Source ID be derived rather than random?** Deriving it from the session key would
   make it unspoofable without authenticating every packet, at the cost of changing whenever the
   session code changes.
